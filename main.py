@@ -1,12 +1,22 @@
 """Phonexi entry point."""
 
+import threading
+import tkinter as tk
+
 from phonexi.listener import HotkeyListener
 
 
 def main() -> None:
-    listener = HotkeyListener()
+    root = tk.Tk()
+    root.withdraw()
+
+    listener = HotkeyListener(tk_root=root)
+    t = threading.Thread(target=listener.start, daemon=True)
+    t.start()
+
+    print("[Phonexi] Running. Press Right Shift + P to capture. Ctrl+C to quit.")
     try:
-        listener.start()
+        root.mainloop()
     except KeyboardInterrupt:
         print("\n[Phonexi] Stopped.")
 
