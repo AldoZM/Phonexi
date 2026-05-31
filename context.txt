@@ -1,0 +1,115 @@
+# Phonexi — Project Context
+
+## What it is
+Background Python daemon for Windows. Listens for Right Shift + P hotkey. On trigger:
+1. Captures screenshot of the monitor where the cursor is
+2. Sends screenshot to Groq vision LLM
+3. Streams response into a dark terminal-style Tkinter popup on secondary monitor
+
+Primary use case: discreet coding assistant during interviews or problem-solving sessions.
+
+---
+
+## Tech Stack
+- Python 3.14 on Windows 10
+- pynput — global hotkey detection (Right Shift + P, case-insensitive)
+- mss + ctypes.windll.user32.GetCursorPos — per-monitor screenshot capture
+- groq (Python SDK) — LLM inference via Groq API (model: meta-llama/llama-4-scout-17b-16e-instruct)
+- Tkinter Toplevel — dark popup UI (overrideredirect=True, no taskbar entry)
+- pygments — syntax highlighting inside code blocks
+- python-dotenv — load GROQ_API_KEY from .env
+
+---
+
+## Project Structure
+```
+Phonexi/
+├── main.py                  # Entry point: starts pynput thread + Tk mainloop
+├── phonexi/
+│   ├── config.py            # Loads env vars (GROQ_API_KEY, GROQ_MODEL, PROMPT)
+│   ├── screenshot.py        # Captures monitor where cursor is using mss + ctypes
+│   ├── processor.py         # Sends image to Groq, streams tokens back
+│   ├── listener.py          # HotkeyListener: detects Right Shift+P, orchestrates flow
+│   └── ui.py                # ResultWindow: dark Tkinter popup with Markdown+syntax highlighting
+├── tests/                   # pytest suite (17 tests, all passing)
+├── requirements.txt
+├── .env                     # NOT in git — contains GROQ_API_KEY=gsk_...
+└── .gitignore               # .env is excluded
+```
+
+---
+
+## Key Design Decisions
+
+### Threading model
+- pynput listener runs in daemon thread (blocks if on main thread)
+- Tkinter mainloop runs on main thread
+- Widget creation must happen on main thread → use root.after(0, callback)
+- LLM streaming runs in worker daemon thread
+
+### Hotkey detection
+- pynput reports uppercase 'P' when Shift is held → check k.char.lower() == 'p'
+- Modifier tracked via set() of pressed keys + threading.Lock
+
+### Screenshot
+- mss monitors[0] = combined virtual screen (wrong)
+- monitors[1] = primary, monitors[2+] = secondary
+- Use ctypes.windll.user32.GetCursorPos to find which monitor the cursor is on
+- Capture only that monitor → saves as PNG in /screenshots/
+
+### Popup window
+- overrideredirect(True) → no title bar, no taskbar entry (discreet)
+- Always appears on secondary monitor (monitors[2] if exists, else monitors[1])
+- Closes with Escape key
+- -topmost True to stay above other windows
+
+### LLM response rendering
+- Buffer all streamed tokens first ("Analyzing screenshot..." shown meanwhile)
+- After full response received → parse Markdown → render with tags
+- Code blocks (```lang ... ```) → pygments syntax highlighting (Dracula color scheme)
+- Headings, bold, italic, inline code → Tkinter text tags
+
+### API key security
+- GROQ_API_KEY stored in .env only (never committed)
+- .gitignore excludes .env file explicitly
+
+---
+
+## Why Groq instead of Google Gemini
+Originally planned to use Google Gemini API (google-genai SDK). Failed because:
+- User's Google account (associated with an organization) generates AQ.Ab8... format keys
+  instead of standard AIza... API keys
+- These are OAuth2/service-account-bound tokens, not standard API keys
+- quota=0 for free tier on gemini-2.0-flash for the gen-lang-client project
+- Google Cloud Console forces service account binding for all Gemini API credentials
+Groq was chosen as alternative: free tier, standard API key, fast inference, vision support.
+
+---
+
+## Running
+```bash
+# Install deps
+pip install -r requirements.txt
+
+# Set up .env
+echo GROQ_API_KEY=gsk_your_key_here > .env
+
+# Run
+python main.py
+
+# Hotkey: Right Shift + P
+# Close popup: Escape
+```
+
+---
+
+## Tests
+```bash
+python -m pytest tests/ -v
+# 17 tests, all passing
+```
+
+---
+
+## GitHub
+https://github.com/AldoZM/Phonexi
