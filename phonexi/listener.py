@@ -88,7 +88,7 @@ class HotkeyListener:
         self._close_current()
         win = ResultWindow(self._tk_root)
         self._current_window = win
-        win.show_status("🎙 Recording… release Alt+P to send")
+        win.show_status("🎙 Listening...")
 
     def _on_audio_stop(self) -> None:
         if self._record_stop:
@@ -108,7 +108,7 @@ class HotkeyListener:
         if win is None:
             return
 
-        self._tk_root.after(0, win.show_status, "⏳ Transcribing…")
+        self._tk_root.after(0, win.show_status, "⏳ Analyzing...")
 
         try:
             text = transcribe(wav_bytes)
