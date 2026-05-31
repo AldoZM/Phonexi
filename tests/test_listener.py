@@ -23,7 +23,7 @@ def test_start_capture_calls_capture_and_creates_window(root):
 
     with patch("phonexi.listener.capture", return_value=fake_path) as mock_capture, \
          patch("phonexi.listener.ResultWindow") as mock_window_cls, \
-         patch.object(listener, "_stream_to"):
+         patch.object(listener, "_stream_image"):
 
         mock_window_cls.return_value = MagicMock()
         listener._start_capture()
@@ -32,26 +32,26 @@ def test_start_capture_calls_capture_and_creates_window(root):
         mock_window_cls.assert_called_once_with(root)
 
 
-def test_stream_to_calls_process_and_show(root):
+def test_stream_image_calls_process_and_show(root):
     listener = HotkeyListener(tk_root=root)
     fake_path = MagicMock()
     fake_tokens = iter(["hello"])
     mock_win = MagicMock()
 
     with patch("phonexi.listener.process", return_value=fake_tokens) as mock_process:
-        listener._stream_to(fake_path, mock_win)
+        listener._stream_image(fake_path, mock_win)
 
     mock_process.assert_called_once_with(fake_path)
     mock_win.show.assert_called_once_with(fake_tokens)
 
 
-def test_stream_to_handles_groq_not_configured(root):
+def test_stream_image_handles_groq_not_configured(root):
     from phonexi.processor import GroqNotConfiguredError
     listener = HotkeyListener(tk_root=root)
     mock_win = MagicMock()
 
     with patch("phonexi.listener.process", side_effect=GroqNotConfiguredError()):
-        listener._stream_to(MagicMock(), mock_win)
+        listener._stream_image(MagicMock(), mock_win)
 
     root.update()
     mock_win.show_error.assert_called_once_with(
@@ -59,12 +59,12 @@ def test_stream_to_handles_groq_not_configured(root):
     )
 
 
-def test_stream_to_handles_generic_error(root):
+def test_stream_image_handles_generic_error(root):
     listener = HotkeyListener(tk_root=root)
     mock_win = MagicMock()
 
     with patch("phonexi.listener.process", side_effect=RuntimeError("network fail")):
-        listener._stream_to(MagicMock(), mock_win)
+        listener._stream_image(MagicMock(), mock_win)
 
     root.update()
     mock_win.show_error.assert_called_once_with("Error: network fail")

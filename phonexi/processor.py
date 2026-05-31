@@ -15,6 +15,23 @@ class GroqAPIError(Exception):
     pass
 
 
+def process_text(question: str) -> Iterator[str]:
+    if not GROQ_API_KEY:
+        raise GroqNotConfiguredError("GROQ_API_KEY not set")
+
+    client = Groq(api_key=GROQ_API_KEY)
+    stream = client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[{"role": "user", "content": question}],
+        stream=True,
+        max_tokens=1024,
+    )
+    for chunk in stream:
+        token = chunk.choices[0].delta.content
+        if token:
+            yield token
+
+
 def process(path: Path) -> Iterator[str]:
     if not GROQ_API_KEY:
         raise GroqNotConfiguredError("GROQ_API_KEY not set")
