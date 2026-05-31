@@ -20,9 +20,17 @@ def process_text(question: str) -> Iterator[str]:
         raise GroqNotConfiguredError("GROQ_API_KEY not set")
 
     client = Groq(api_key=GROQ_API_KEY)
+    system = (
+        "You are a concise technical assistant. "
+        "Respond in the same language as the question. "
+        "No preamble, no filler phrases. Just the solution."
+    )
     stream = client.chat.completions.create(
         model=GROQ_MODEL,
-        messages=[{"role": "user", "content": question}],
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": question},
+        ],
         stream=True,
         max_tokens=1024,
     )
