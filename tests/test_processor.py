@@ -4,7 +4,7 @@ import base64
 
 import pytest
 
-from phonexi.processor import GeminiNotConfiguredError, process
+from phonexi.processor import GroqNotConfiguredError, process
 
 
 def _png(tmp_path: Path) -> Path:
@@ -18,8 +18,8 @@ def _png(tmp_path: Path) -> Path:
 
 def test_process_raises_when_key_missing(tmp_path):
     img = _png(tmp_path)
-    with patch("phonexi.processor.GEMINI_API_KEY", ""):
-        with pytest.raises(GeminiNotConfiguredError):
+    with patch("phonexi.processor.GROQ_API_KEY", ""):
+        with pytest.raises(GroqNotConfiguredError):
             list(process(img))
 
 
@@ -27,34 +27,32 @@ def test_process_yields_tokens(tmp_path):
     img = _png(tmp_path)
 
     chunk1 = MagicMock()
-    chunk1.text = "Hello"
+    chunk1.choices[0].delta.content = "Hello"
     chunk2 = MagicMock()
-    chunk2.text = " world"
+    chunk2.choices[0].delta.content = " world"
     chunk3 = MagicMock()
-    chunk3.text = None
+    chunk3.choices[0].delta.content = None
 
     mock_client = MagicMock()
-    mock_client.models.generate_content_stream.return_value = iter([chunk1, chunk2, chunk3])
+    mock_client.chat.completions.create.return_value = iter([chunk1, chunk2, chunk3])
 
-    with patch("phonexi.processor.GEMINI_API_KEY", "fake-key"), \
-         patch("phonexi.processor.genai") as mock_genai:
-        mock_genai.Client.return_value = mock_client
+    with patch("phonexi.processor.GROQ_API_KEY", "fake-key"), \
+         patch("phonexi.processor.Groq", return_value=mock_client):
         tokens = list(process(img))
 
     assert tokens == ["Hello", " world"]
 
 
-def test_process_calls_generate_with_correct_model(tmp_path):
+def test_process_calls_correct_model(tmp_path):
     img = _png(tmp_path)
 
     mock_client = MagicMock()
-    mock_client.models.generate_content_stream.return_value = iter([])
+    mock_client.chat.completions.create.return_value = iter([])
 
-    with patch("phonexi.processor.GEMINI_API_KEY", "fake-key"), \
-         patch("phonexi.processor.genai") as mock_genai:
-        mock_genai.Client.return_value = mock_client
+    with patch("phonexi.processor.GROQ_API_KEY", "fake-key"), \
+         patch("phonexi.processor.Groq", return_value=mock_client):
         list(process(img))
 
-    mock_client.models.generate_content_stream.assert_called_once()
-    call_kwargs = mock_client.models.generate_content_stream.call_args
-    assert call_kwargs.kwargs["model"] == "gemini-2.0-flash"
+    call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+    assert "llama-4-scout" in call_kwargs["model"]
+    assert call_kwargs["stream"] is True

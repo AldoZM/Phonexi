@@ -1,33 +1,46 @@
+import base64
 from pathlib import Path
 from typing import Iterator
 
-from google import genai
-from google.genai import types
-from PIL import Image
+from groq import Groq
 
-from phonexi.config import GEMINI_API_KEY, GEMINI_MODEL, PROMPT
+from phonexi.config import GROQ_API_KEY, GROQ_MODEL, PROMPT
 
 
-class GeminiNotConfiguredError(Exception):
+class GroqNotConfiguredError(Exception):
     pass
 
 
-class GeminiAPIError(Exception):
+class GroqAPIError(Exception):
     pass
 
 
 def process(path: Path) -> Iterator[str]:
-    if not GEMINI_API_KEY:
-        raise GeminiNotConfiguredError("GEMINI_API_KEY not set")
+    if not GROQ_API_KEY:
+        raise GroqNotConfiguredError("GROQ_API_KEY not set")
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    image = Image.open(path)
+    image_b64 = base64.b64encode(path.read_bytes()).decode("utf-8")
+    client = Groq(api_key=GROQ_API_KEY)
 
-    response = client.models.generate_content_stream(
-        model=GEMINI_MODEL,
-        contents=[PROMPT, image],
+    stream = client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{image_b64}"},
+                    },
+                    {"type": "text", "text": PROMPT},
+                ],
+            }
+        ],
+        stream=True,
+        max_tokens=1024,
     )
-    for chunk in response:
-        text = chunk.text
-        if text:
-            yield text
+
+    for chunk in stream:
+        token = chunk.choices[0].delta.content
+        if token:
+            yield token

@@ -1,7 +1,7 @@
 import threading
 from pynput import keyboard
 
-from phonexi.processor import GeminiAPIError, GeminiNotConfiguredError, process
+from phonexi.processor import GroqAPIError, GroqNotConfiguredError, process
 from phonexi.screenshot import capture
 from phonexi.ui import ResultWindow
 
@@ -52,11 +52,11 @@ class HotkeyListener:
         try:
             tokens = process(path)
             win.show(tokens)
-        except GeminiNotConfiguredError:
+        except GroqNotConfiguredError:
             self._tk_root.after(0, win.show_error,
-                                "GEMINI_API_KEY not set — add it to .env")
-        except GeminiAPIError as exc:
-            self._tk_root.after(0, win.show_error, f"Gemini error: {exc}")
+                                "GROQ_API_KEY not set — add it to .env")
+        except GroqAPIError as exc:
+            self._tk_root.after(0, win.show_error, f"Groq error: {exc}")
         except Exception as exc:
             self._tk_root.after(0, win.show_error, f"Error: {exc}")
 

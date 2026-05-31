@@ -45,17 +45,17 @@ def test_stream_to_calls_process_and_show(root):
     mock_win.show.assert_called_once_with(fake_tokens)
 
 
-def test_stream_to_handles_gemini_not_configured(root):
-    from phonexi.processor import GeminiNotConfiguredError
+def test_stream_to_handles_groq_not_configured(root):
+    from phonexi.processor import GroqNotConfiguredError
     listener = HotkeyListener(tk_root=root)
     mock_win = MagicMock()
 
-    with patch("phonexi.listener.process", side_effect=GeminiNotConfiguredError()):
+    with patch("phonexi.listener.process", side_effect=GroqNotConfiguredError()):
         listener._stream_to(MagicMock(), mock_win)
 
     root.update()
     mock_win.show_error.assert_called_once_with(
-        "GEMINI_API_KEY not set — add it to .env"
+        "GROQ_API_KEY not set — add it to .env"
     )
 
 
