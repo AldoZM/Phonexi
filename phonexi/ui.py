@@ -94,10 +94,13 @@ class ResultWindow:
     # ── low-level insert ────────────────────────────────────────────────────
 
     def _ins(self, text: str, *tags) -> None:
-        self._text.configure(state=tk.NORMAL)
-        self._text.insert(tk.END, text, tags if tags else "")
-        self._text.see(tk.END)
-        self._text.configure(state=tk.DISABLED)
+        try:
+            self._text.configure(state=tk.NORMAL)
+            self._text.insert(tk.END, text, tags if tags else "")
+            self._text.see(tk.END)
+            self._text.configure(state=tk.DISABLED)
+        except tk.TclError:
+            pass
 
     # ── markdown renderer ────────────────────────────────────────────────────
 

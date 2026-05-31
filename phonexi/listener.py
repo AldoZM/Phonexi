@@ -10,7 +10,7 @@ from phonexi.ui import ResultWindow
 class HotkeyListener:
     _TRIGGER_CHAR = "p"
     _SCREENSHOT_MOD = keyboard.Key.shift_r   # Right Shift + P → screenshot
-    _AUDIO_MOD      = keyboard.Key.alt_gr    # Right Alt   + P → push-to-talk
+    _AUDIO_MOD      = keyboard.Key.alt_gr    # Right Alt   + P → toggle recording
 
     def __init__(self, tk_root) -> None:
         self._tk_root = tk_root
@@ -20,6 +20,7 @@ class HotkeyListener:
 
         self._recording = False
         self._record_stop: threading.Event | None = None
+        self._hotkey_cooldown = False
 
     # ── key events ──────────────────────────────────────────────────────────
 
@@ -31,18 +32,19 @@ class HotkeyListener:
 
         if self._SCREENSHOT_MOD in self._pressed and p_down:
             self._on_screenshot_hotkey()
-        elif self._AUDIO_MOD in self._pressed and p_down and not self._recording:
-            self._on_audio_start()
+        elif self._AUDIO_MOD in self._pressed and p_down and not self._hotkey_cooldown:
+            self._hotkey_cooldown = True
+            if self._recording:
+                self._on_audio_stop()
+            else:
+                self._on_audio_start()
 
     def _on_release(self, key) -> None:
         with self._lock:
             self._pressed.discard(key)
 
-        released_audio_key = key in (self._AUDIO_MOD,) or (
-            hasattr(key, "char") and key.char and key.char.lower() == self._TRIGGER_CHAR
-        )
-        if self._recording and released_audio_key:
-            self._on_audio_stop()
+        if key == self._AUDIO_MOD:
+            self._hotkey_cooldown = False
 
     def _p_held(self) -> bool:
         return any(
@@ -72,7 +74,7 @@ class HotkeyListener:
         except Exception as exc:
             self._tk_root.after(0, win.show_error, f"Error: {exc}")
 
-    # ── audio flow (Right Alt + P, push-to-talk) ────────────────────────────
+    # ── audio flow (Right Alt + P, toggle) ──────────────────────────────────
 
     def _on_audio_start(self) -> None:
         self._recording = True
@@ -113,14 +115,17 @@ class HotkeyListener:
         try:
             text = transcribe(wav_bytes)
         except Exception as exc:
-            self._tk_root.after(0, win.show_error, f"Transcription error: {exc}")
+            if win is self._current_window:
+                self._tk_root.after(0, win.show_error, f"Transcription error: {exc}")
             return
 
         if not text:
-            self._tk_root.after(0, win.show_error, "No speech detected")
+            if win is self._current_window:
+                self._tk_root.after(0, win.show_error, "No speech detected")
             return
 
-        self._tk_root.after(0, win.show_status, f"❓ {text}\n")
+        if win is self._current_window:
+            self._tk_root.after(0, win.show_status, f"❓ {text}\n")
         try:
             win.show(process_text(text))
         except GroqNotConfiguredError:

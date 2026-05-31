@@ -2,57 +2,59 @@ import io
 import threading
 import wave
 
-import numpy as np
-import sounddevice as sd
+import pyaudiowpatch as pyaudio
 from groq import Groq
 
 from phonexi.config import GROQ_API_KEY
 
-_SAMPLERATE = 16000
+_CHUNK = 512
 _WHISPER_MODEL = "whisper-large-v3-turbo"
 
 
-def _loopback_device() -> tuple[int, int]:
-    """Return (device_index, channels) for WASAPI loopback of the default output device."""
-    for api in sd.query_hostapis():
-        if "WASAPI" in api["name"]:
-            dev_idx = api["default_output_device"]
-            channels = max(1, sd.query_devices(dev_idx)["max_output_channels"])
-            return dev_idx, channels
-    raise RuntimeError("WASAPI not found — required for system audio loopback on Windows")
+def _get_loopback_device(p: pyaudio.PyAudio) -> dict:
+    wasapi = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+    default_speakers = p.get_device_info_by_index(wasapi["defaultOutputDevice"])
+
+    if default_speakers.get("isLoopbackDevice"):
+        return default_speakers
+
+    for loopback in p.get_loopback_device_info_generator():
+        if default_speakers["name"] in loopback["name"]:
+            return loopback
+
+    raise RuntimeError("No WASAPI loopback device found for default output")
 
 
 def record(stop_event: threading.Event) -> bytes:
     """Capture system audio (loopback) until stop_event is set. Returns WAV bytes."""
-    frames: list[np.ndarray] = []
+    with pyaudio.PyAudio() as p:
+        device = _get_loopback_device(p)
+        channels = device["maxInputChannels"]
+        samplerate = int(device["defaultSampleRate"])
 
-    def _cb(indata, _frames, _time, _status):
-        frames.append(indata.copy())
+        stream = p.open(
+            format=pyaudio.paInt16,
+            channels=channels,
+            rate=samplerate,
+            input=True,
+            input_device_index=device["index"],
+            frames_per_buffer=_CHUNK,
+        )
 
-    device, channels = _loopback_device()
+        frames = []
+        while not stop_event.is_set():
+            data = stream.read(_CHUNK, exception_on_overflow=False)
+            frames.append(data)
 
-    with sd.InputStream(
-        device=device,
-        samplerate=_SAMPLERATE,
-        channels=channels,
-        dtype="int16",
-        extra_settings=sd.WasapiSettings(loopback=True),
-        callback=_cb,
-    ):
-        stop_event.wait()
-
-    audio = np.concatenate(frames, axis=0) if frames else np.zeros((0, channels), dtype="int16")
-
-    # Mix down to mono for Whisper
-    if channels > 1:
-        audio = audio.mean(axis=1, keepdims=True).astype("int16")
+        stream.stop_stream()
+        stream.close()
 
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wf:
-        wf.setnchannels(1)
+        wf.setnchannels(channels)
         wf.setsampwidth(2)
-        wf.setframerate(_SAMPLERATE)
-        wf.writeframes(audio.tobytes())
+        wf.setframerate(samplerate)
+        wf.writeframes(b"".join(frames))
     return buf.getvalue()
 
 
