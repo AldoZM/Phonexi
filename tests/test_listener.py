@@ -45,29 +45,26 @@ def test_stream_to_calls_process_and_show(root):
     mock_win.show.assert_called_once_with(fake_tokens)
 
 
-def test_stream_to_handles_ollama_not_running(root):
-    from phonexi.processor import OllamaNotRunningError
+def test_stream_to_handles_gemini_not_configured(root):
+    from phonexi.processor import GeminiNotConfiguredError
     listener = HotkeyListener(tk_root=root)
     mock_win = MagicMock()
 
-    with patch("phonexi.listener.process", side_effect=OllamaNotRunningError()):
+    with patch("phonexi.listener.process", side_effect=GeminiNotConfiguredError()):
         listener._stream_to(MagicMock(), mock_win)
 
-    root.update()  # flush after() queue
+    root.update()
     mock_win.show_error.assert_called_once_with(
-        "Ollama not running — start with: ollama serve"
+        "GEMINI_API_KEY not set — add it to .env"
     )
 
 
-def test_stream_to_handles_model_not_found(root):
-    from phonexi.processor import ModelNotFoundError
+def test_stream_to_handles_generic_error(root):
     listener = HotkeyListener(tk_root=root)
     mock_win = MagicMock()
 
-    with patch("phonexi.listener.process", side_effect=ModelNotFoundError()):
+    with patch("phonexi.listener.process", side_effect=RuntimeError("network fail")):
         listener._stream_to(MagicMock(), mock_win)
 
-    root.update()  # flush after() queue
-    mock_win.show_error.assert_called_once_with(
-        "Model not found — run: ollama pull llama3.2-vision:11b"
-    )
+    root.update()
+    mock_win.show_error.assert_called_once_with("Error: network fail")

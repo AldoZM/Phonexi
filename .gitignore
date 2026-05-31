@@ -16,6 +16,9 @@ venv/
 env/
 .env/
 
+# Secrets
+.env
+
 # IDE
 .vscode/
 .idea/

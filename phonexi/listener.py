@@ -1,7 +1,7 @@
 import threading
 from pynput import keyboard
 
-from phonexi.processor import ModelNotFoundError, OllamaNotRunningError, process
+from phonexi.processor import GeminiAPIError, GeminiNotConfiguredError, process
 from phonexi.screenshot import capture
 from phonexi.ui import ResultWindow
 
@@ -52,12 +52,13 @@ class HotkeyListener:
         try:
             tokens = process(path)
             win.show(tokens)
-        except OllamaNotRunningError:
+        except GeminiNotConfiguredError:
             self._tk_root.after(0, win.show_error,
-                                "Ollama not running — start with: ollama serve")
-        except ModelNotFoundError:
-            self._tk_root.after(0, win.show_error,
-                                "Model not found — run: ollama pull llama3.2-vision:11b")
+                                "GEMINI_API_KEY not set — add it to .env")
+        except GeminiAPIError as exc:
+            self._tk_root.after(0, win.show_error, f"Gemini error: {exc}")
+        except Exception as exc:
+            self._tk_root.after(0, win.show_error, f"Error: {exc}")
 
     def start(self) -> None:
         with keyboard.Listener(

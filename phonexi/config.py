@@ -1,6 +1,10 @@
-OLLAMA_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llava:7b"
-TIMEOUT_S = 120
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = "gemini-2.0-flash"
 PROMPT = (
     "Extract the code from this screenshot. "
     "Identify the problem or question. "
