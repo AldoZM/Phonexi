@@ -113,3 +113,59 @@ python -m pytest tests/ -v
 
 ## GitHub
 https://github.com/AldoZM/Phonexi
+
+---
+
+## Setting Up on a New Machine
+
+### Prerequisites
+- Windows 10/11 (required — uses ctypes.windll, pynput, Tkinter)
+- Python 3.10+ (tested on 3.14)
+- Git
+
+### Step-by-step
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/AldoZM/Phonexi.git
+cd Phonexi
+
+# 2. (Recommended) Create a virtual environment
+python -m venv .venv
+.venv\Scripts\activate        # Windows CMD
+# or: .venv/Scripts/Activate.ps1   # PowerShell
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Create the .env file with your Groq API key
+#    .env is NOT in git — you must create it manually on every machine
+echo GROQ_API_KEY=gsk_your_key_here > .env
+
+# 5. Run
+python main.py
+```
+
+### Getting a Groq API key
+1. Go to https://console.groq.com
+2. Create a free account (no credit card required)
+3. API Keys → Create API key
+4. Copy the key (starts with gsk_...)
+5. Paste it into .env as shown above
+
+### What NOT to do
+- Do NOT commit .env — the API key must stay local
+- Do NOT use Google Gemini — the owner's Google account is organization-managed
+  and only generates service-account-bound OAuth tokens (AQ.Ab8... format),
+  not standard API keys. Groq is the chosen provider.
+- Do NOT run on Linux/macOS — ctypes.windll and pynput global hotkeys
+  require Windows
+
+### Troubleshooting
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `GROQ_API_KEY not set` error | .env missing or empty | Create .env with key |
+| Popup appears on primary monitor | Only 1 monitor detected | Connect second monitor |
+| Hotkey not detected | Another app captured Right Shift+P | Close conflicting app |
+| `ModuleNotFoundError` | venv not activated or deps not installed | Run `pip install -r requirements.txt` |
+| `GroqAPIError` 429 | Daily rate limit hit (14,400 req/day free) | Wait until next UTC day |
