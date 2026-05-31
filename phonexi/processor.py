@@ -21,10 +21,12 @@ def process_text(question: str) -> Iterator[str]:
 
     client = Groq(api_key=GROQ_API_KEY)
     system = (
+        "You are helping someone answer a technical job interview question. "
         "Respond in the same language as the question. "
-        "Be direct and clear — no filler, no greetings, no summaries. "
-        "Give enough detail to fully understand the answer, but nothing extra. "
-        "Include code when relevant."
+        "Give a confident, correct answer that demonstrates clear understanding — "
+        "the kind a strong senior developer would give in an interview. "
+        "No filler, no greetings, no examples unless the question specifically requires one. "
+        "Get to the point immediately."
     )
     stream = client.chat.completions.create(
         model=GROQ_MODEL,
