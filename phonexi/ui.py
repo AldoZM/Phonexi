@@ -211,6 +211,7 @@ class ResultWindow:
         self._text.delete("1.0", tk.END)
         self._text.configure(state=tk.DISABLED)
         self._render_markdown(text)
+        self._text.see("1.0")
 
     def show_status(self, msg: str) -> None:
         self._text.configure(state=tk.NORMAL)
