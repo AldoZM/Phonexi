@@ -10,7 +10,7 @@ from phonexi.ui import ResultWindow
 class HotkeyListener:
     _TRIGGER_CHAR = "p"
     _SCREENSHOT_MOD = keyboard.Key.shift_r   # Right Shift + P → screenshot
-    _AUDIO_MOD      = keyboard.Key.alt_r     # Right Alt   + P → push-to-talk
+    _AUDIO_MOD      = keyboard.Key.alt_gr    # Right Alt   + P → push-to-talk
 
     def __init__(self, tk_root) -> None:
         self._tk_root = tk_root
