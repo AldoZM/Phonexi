@@ -21,6 +21,7 @@ class HotkeyListener:
         self._recording = False
         self._record_stop: threading.Event | None = None
         self._hotkey_cooldown = False
+        self._screenshot_cooldown = False
 
     # ── key events ──────────────────────────────────────────────────────────
 
@@ -30,7 +31,8 @@ class HotkeyListener:
 
         p_down = self._p_held()
 
-        if self._SCREENSHOT_MOD in self._pressed and p_down:
+        if self._SCREENSHOT_MOD in self._pressed and p_down and not self._screenshot_cooldown:
+            self._screenshot_cooldown = True
             self._on_screenshot_hotkey()
         elif self._AUDIO_MOD in self._pressed and p_down and not self._hotkey_cooldown:
             self._hotkey_cooldown = True
@@ -43,6 +45,8 @@ class HotkeyListener:
         with self._lock:
             self._pressed.discard(key)
 
+        if key == self._SCREENSHOT_MOD:
+            self._screenshot_cooldown = False
         if key == self._AUDIO_MOD:
             self._hotkey_cooldown = False
 
