@@ -7,7 +7,7 @@ from phonexi.ui import ResultWindow
 
 
 class HotkeyListener:
-    _TRIGGER_KEY = keyboard.KeyCode.from_char("p")
+    _TRIGGER_CHAR = "p"
     _MODIFIER_KEY = keyboard.Key.shift_r
 
     def __init__(self, tk_root) -> None:
@@ -20,10 +20,11 @@ class HotkeyListener:
         with self._lock:
             self._pressed.add(key)
 
-        if (
-            self._MODIFIER_KEY in self._pressed
-            and self._TRIGGER_KEY in self._pressed
-        ):
+        p_down = any(
+            hasattr(k, "char") and k.char and k.char.lower() == self._TRIGGER_CHAR
+            for k in self._pressed
+        )
+        if self._MODIFIER_KEY in self._pressed and p_down:
             self._on_hotkey()
 
     def _on_release(self, key) -> None:
@@ -31,26 +32,32 @@ class HotkeyListener:
             self._pressed.discard(key)
 
     def _on_hotkey(self) -> None:
-        threading.Thread(target=self._process_and_show, daemon=True).start()
+        # Schedule capture on main thread so Tkinter widget creation is safe
+        self._tk_root.after(0, self._start_capture)
 
-    def _process_and_show(self) -> None:
-        # Close any existing window before opening a new one
+    def _start_capture(self) -> None:
+        # Runs on main thread — safe to create/destroy Tk widgets
         if self._current_window is not None:
             try:
-                self._tk_root.after(0, self._current_window._win.destroy)
+                self._current_window._win.destroy()
             except Exception:
                 pass
 
         path = capture()
         win = ResultWindow(self._tk_root)
         self._current_window = win
+        threading.Thread(target=self._stream_to, args=(path, win), daemon=True).start()
+
+    def _stream_to(self, path, win) -> None:
         try:
             tokens = process(path)
             win.show(tokens)
         except OllamaNotRunningError:
-            win.show_error("Ollama not running — start with: ollama serve")
+            self._tk_root.after(0, win.show_error,
+                                "Ollama not running — start with: ollama serve")
         except ModelNotFoundError:
-            win.show_error("Model not found — run: ollama pull llama3.2-vision:11b")
+            self._tk_root.after(0, win.show_error,
+                                "Model not found — run: ollama pull llama3.2-vision:11b")
 
     def start(self) -> None:
         with keyboard.Listener(
