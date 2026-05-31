@@ -45,8 +45,8 @@ def test_show_error_inserts_message(root):
 
 def test_insert_appends_text(root):
     win = ResultWindow(root)
-    win._insert("hello")
-    win._insert(" world")
+    win._ins("hello")
+    win._ins(" world")
     content = win._text.get("1.0", tk.END)
     assert "hello world" in content
     win._win.destroy()

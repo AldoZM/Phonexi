@@ -1,5 +1,6 @@
 mss>=9.0.1
 pynput>=1.7.7
 groq>=0.9
+pygments>=2.17
 python-dotenv>=1.0
 pytest>=8.0
