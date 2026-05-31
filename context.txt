@@ -80,6 +80,19 @@ Phonexi/
 - After full response received → parse Markdown → render with tags
 - Code blocks (```lang ... ```) → pygments syntax highlighting (Dracula color scheme)
 - Headings, bold, italic, inline code → Tkinter text tags
+- After render, scroll to top (text.see("1.0")) so response is visible from the start
+- User scrolls manually to read the rest
+
+### Draggable window
+- ButtonPress-1 and B1-Motion bound to both _win and _text widget (add="+")
+- Drag offset calculated from x_root/y_root - winfo_x/y
+- Works despite overrideredirect(True) removing native title bar
+
+### Interview-style prompt
+- Responds in the same language as the question (auto-detected)
+- Tone: confident senior developer answering in a technical interview
+- No filler, no greetings, no examples unless question requires one
+- Applied to both screenshot mode (PROMPT in config.py) and audio mode (system message in processor.py)
 
 ### Audio loopback (WASAPI)
 - pyaudiowpatch used instead of sounddevice — sounddevice's WasapiSettings has no loopback param
