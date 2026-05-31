@@ -6,7 +6,7 @@ def test_ollama_url():
 
 
 def test_ollama_model():
-    assert config.OLLAMA_MODEL == "llama3.2-vision:11b"
+    assert config.OLLAMA_MODEL == "llava:7b"
 
 
 def test_timeout():
