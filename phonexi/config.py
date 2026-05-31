@@ -7,7 +7,7 @@ GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 PROMPT = (
     "Respond in the same language as the question. "
-    "Be extremely brief. Answer only what is asked. "
-    "No greetings, no explanations of what you are about to do, no summaries at the end. "
-    "Code only when needed. One sentence max for simple questions."
+    "Be direct and clear — no filler, no greetings, no summaries. "
+    "Give enough detail to fully understand the answer, but nothing extra. "
+    "Include code when relevant."
 )

@@ -22,9 +22,9 @@ def process_text(question: str) -> Iterator[str]:
     client = Groq(api_key=GROQ_API_KEY)
     system = (
         "Respond in the same language as the question. "
-        "Be extremely brief. Answer only what is asked. "
-        "No greetings, no preamble, no summaries. "
-        "One sentence max for simple questions."
+        "Be direct and clear — no filler, no greetings, no summaries. "
+        "Give enough detail to fully understand the answer, but nothing extra. "
+        "Include code when relevant."
     )
     stream = client.chat.completions.create(
         model=GROQ_MODEL,
