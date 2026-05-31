@@ -54,6 +54,12 @@ class ResultWindow:
         y = mon["top"] + (mon["height"] - self._HEIGHT) // 2
         self._win.geometry(f"{self._WIDTH}x{self._HEIGHT}+{x}+{y}")
 
+        self._drag_x = 0
+        self._drag_y = 0
+        for widget in (self._win, self._text):
+            widget.bind("<ButtonPress-1>", self._on_drag_start, add="+")
+            widget.bind("<B1-Motion>",     self._on_drag_motion, add="+")
+
     def _setup_tags(self) -> None:
         fn, fs = self._font
         self._text.tag_configure("status",   foreground="#6272a4")
@@ -90,6 +96,15 @@ class ResultWindow:
             if name in available:
                 return (name, 11)
         return ("Courier New", 11)
+
+    # ── drag ────────────────────────────────────────────────────────────────
+
+    def _on_drag_start(self, event: tk.Event) -> None:
+        self._drag_x = event.x_root - self._win.winfo_x()
+        self._drag_y = event.y_root - self._win.winfo_y()
+
+    def _on_drag_motion(self, event: tk.Event) -> None:
+        self._win.geometry(f"+{event.x_root - self._drag_x}+{event.y_root - self._drag_y}")
 
     # ── low-level insert ────────────────────────────────────────────────────
 
