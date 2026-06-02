@@ -30,6 +30,10 @@ class HotkeyListener:
         with self._lock:
             self._pressed.add(key)
 
+        if key == keyboard.Key.esc:
+            self._tk_root.after(0, self._close_current)
+            return
+
         # Only trigger when P itself is pressed — avoids firing on modifier-only press
         if not self._is_p(key):
             return
