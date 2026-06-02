@@ -2,7 +2,7 @@ import threading
 from pynput import keyboard
 
 from phonexi.audio import record, transcribe
-from phonexi.processor import GroqAPIError, GroqNotConfiguredError, process, process_text
+from phonexi.processor import Context, GroqAPIError, GroqNotConfiguredError, process, process_text
 from phonexi.screenshot import capture
 from phonexi.ui import ResultWindow
 
@@ -22,6 +22,7 @@ class HotkeyListener:
         self._record_stop: threading.Event | None = None
         self._hotkey_cooldown = False
         self._screenshot_cooldown = False
+        self._context: Context | None = None
 
     # ── key events ──────────────────────────────────────────────────────────
 
@@ -29,12 +30,14 @@ class HotkeyListener:
         with self._lock:
             self._pressed.add(key)
 
-        p_down = self._p_held()
+        # Only trigger when P itself is pressed — avoids firing on modifier-only press
+        if not self._is_p(key):
+            return
 
-        if self._SCREENSHOT_MOD in self._pressed and p_down and not self._screenshot_cooldown:
+        if self._SCREENSHOT_MOD in self._pressed and not self._screenshot_cooldown:
             self._screenshot_cooldown = True
             self._on_screenshot_hotkey()
-        elif self._AUDIO_MOD in self._pressed and p_down and not self._hotkey_cooldown:
+        elif self._AUDIO_MOD in self._pressed and not self._hotkey_cooldown:
             self._hotkey_cooldown = True
             if self._recording:
                 self._on_audio_stop()
@@ -50,10 +53,13 @@ class HotkeyListener:
         if key == self._AUDIO_MOD:
             self._hotkey_cooldown = False
 
-    def _p_held(self) -> bool:
-        return any(
-            hasattr(k, "char") and k.char and k.char.lower() == self._TRIGGER_CHAR
-            for k in self._pressed
+    _P_VK = 80  # Virtual key code for 'P' on Windows (used when AltGr suppresses char)
+
+    def _is_p(self, key) -> bool:
+        """True if the given key event is the P key."""
+        return (
+            (hasattr(key, "char") and key.char and key.char.lower() == self._TRIGGER_CHAR)
+            or (hasattr(key, "vk") and key.vk == self._P_VK)
         )
 
     # ── screenshot flow (Right Shift + P) ───────────────────────────────────
@@ -70,7 +76,12 @@ class HotkeyListener:
 
     def _stream_image(self, path, win) -> None:
         try:
-            win.show(process(path))
+            response = win.show_and_collect(process(path))
+            if response:
+                self._context = Context(
+                    user_turn="[Screenshot of interview question]",
+                    assistant_turn=response,
+                )
         except GroqNotConfiguredError:
             self._tk_root.after(0, win.show_error, "GROQ_API_KEY not set — add it to .env")
         except GroqAPIError as exc:
@@ -131,7 +142,9 @@ class HotkeyListener:
         if win is self._current_window:
             self._tk_root.after(0, win.show_status, f"❓ {text}\n")
         try:
-            win.show(process_text(text))
+            response = win.show_and_collect(process_text(text, context=self._context))
+            if response:
+                self._context = Context(user_turn=text, assistant_turn=response)
         except GroqNotConfiguredError:
             self._tk_root.after(0, win.show_error, "GROQ_API_KEY not set — add it to .env")
         except GroqAPIError as exc:

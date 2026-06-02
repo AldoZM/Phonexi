@@ -11,5 +11,12 @@ PROMPT = (
     "Give a confident, correct answer that demonstrates clear understanding — "
     "the kind a strong senior developer would give in an interview. "
     "No filler, no greetings, no examples unless the question specifically requires one. "
-    "Get to the point immediately."
+    "Get to the point immediately. "
+    "When your answer includes code, every logical section must have a comment explaining "
+    "what it does and WHY that implementation decision was made — "
+    "write the comments as if teaching a junior developer, showing mastery of the topic. "
+    "Comments must be in the same language as the question. "
+    "If the input contains multiple questions, answer each one in its own clearly separated section: "
+    "use a numbered heading (e.g. '1.', '2.') and a divider line of dashes (---) between sections "
+    "so each answer is visually distinct and easy to read independently."
 )

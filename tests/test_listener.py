@@ -42,7 +42,7 @@ def test_stream_image_calls_process_and_show(root):
         listener._stream_image(fake_path, mock_win)
 
     mock_process.assert_called_once_with(fake_path)
-    mock_win.show.assert_called_once_with(fake_tokens)
+    mock_win.show_and_collect.assert_called_once_with(fake_tokens)
 
 
 def test_stream_image_handles_groq_not_configured(root):

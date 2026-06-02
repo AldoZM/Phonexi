@@ -82,9 +82,10 @@ class ResultWindow:
         self._text.tag_configure("s_op",    foreground="#ff79c6")
         self._text.tag_configure("s_bi",    foreground="#8be9fd")
         self._text.tag_configure("s_dec",   foreground="#50fa7b")
+        self._text.tag_configure("divider", foreground="#8be9fd")
 
     def _secondary_monitor(self) -> dict:
-        with mss.mss() as sct:
+        with mss.MSS() as sct:
             monitors = sct.monitors
             if len(monitors) > 2:
                 return monitors[2]
@@ -119,9 +120,10 @@ class ResultWindow:
 
     # ── markdown renderer ────────────────────────────────────────────────────
 
-    _CODE_FENCE = re.compile(r"```(\w*)\n(.*?)```", re.DOTALL)
-    _INLINE_RE  = re.compile(r"\*\*(.*?)\*\*|\*(.*?)\*|`([^`]+)`")
-    _HEADING_RE = re.compile(r"^(#{1,3})\s+(.*)")
+    _CODE_FENCE  = re.compile(r"```(\w*)\n(.*?)```", re.DOTALL)
+    _INLINE_RE   = re.compile(r"\*\*(.*?)\*\*|\*(.*?)\*|`([^`]+)`")
+    _HEADING_RE  = re.compile(r"^(#{1,3})\s+(.*)")
+    _DIVIDER_RE  = re.compile(r"^[-/]{3,}\s*$")
 
     def _render_markdown(self, text: str) -> None:
         last = 0
@@ -133,6 +135,9 @@ class ResultWindow:
 
     def _render_prose(self, text: str) -> None:
         for line in text.split("\n"):
+            if self._DIVIDER_RE.match(line):
+                self._ins(line + "\n", "divider")
+                continue
             hm = self._HEADING_RE.match(line)
             if hm:
                 level = len(hm.group(1))
@@ -192,6 +197,11 @@ class ResultWindow:
     # ── public API ───────────────────────────────────────────────────────────
 
     def show(self, iterator: Iterator[str]) -> None:
+        self.show_and_collect(iterator)
+
+    def show_and_collect(self, iterator: Iterator[str]) -> str:
+        result: list[str] = []
+        done = threading.Event()
         self._root.after(0, self._ins, "> Analyzing screenshot...\n", "status")
 
         def _stream() -> None:
@@ -201,10 +211,16 @@ class ResultWindow:
                     buf.append(token)
             except Exception as exc:
                 self._root.after(0, self._ins, f"\n[error: {exc}]", "err")
+                done.set()
                 return
-            self._root.after(0, self._do_render, "".join(buf))
+            full = "".join(buf)
+            result.append(full)
+            self._root.after(0, self._do_render, full)
+            done.set()
 
         threading.Thread(target=_stream, daemon=True).start()
+        done.wait()
+        return result[0] if result else ""
 
     def _do_render(self, text: str) -> None:
         self._text.configure(state=tk.NORMAL)
