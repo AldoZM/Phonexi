@@ -67,7 +67,8 @@ class ResultWindow:
         self._text.tag_configure("h1",       foreground="#8be9fd", font=(fn, fs + 3, "bold"))
         self._text.tag_configure("h2",       foreground="#8be9fd", font=(fn, fs + 1, "bold"))
         self._text.tag_configure("h3",       foreground="#8be9fd", font=(fn, fs,     "bold"))
-        self._text.tag_configure("bold",     foreground="#ffffff",  font=(fn, fs,     "bold"))
+        self._text.tag_configure("bold",     foreground="#282a36", background="#f1fa8c",
+                                  font=(fn, fs, "bold"))
         self._text.tag_configure("italic",   foreground="#f8f8f2",  font=(fn, fs,     "italic"))
         self._text.tag_configure("icode",    foreground="#50fa7b",  background="#1c1c1c")
         self._text.tag_configure("code_bg",  background=self._CODE_BG,
@@ -86,10 +87,11 @@ class ResultWindow:
 
     def _secondary_monitor(self) -> dict:
         with mss.MSS() as sct:
-            monitors = sct.monitors
-            if len(monitors) > 2:
-                return monitors[2]
-            return monitors[1]
+            monitors = sct.monitors[1:]  # skip virtual combined (index 0)
+            for mon in monitors:
+                if not mon.get("is_primary", False):
+                    return mon
+            return monitors[0]
 
     def _resolve_font(self) -> tuple:
         available = tkfont.families()

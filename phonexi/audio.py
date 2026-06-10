@@ -1,3 +1,4 @@
+import array as _array
 import io
 import threading
 import wave
@@ -9,6 +10,25 @@ from phonexi.config import GROQ_API_KEY
 
 _CHUNK = 512
 _WHISPER_MODEL = "whisper-large-v3-turbo"
+_TARGET_RATE = 16000
+
+
+def _to_mono_16k(raw: bytes, channels: int, samplerate: int) -> tuple[bytes, int]:
+    """Downsample to mono 16kHz. Reduces WAV size ~6x for typical 48kHz stereo input."""
+    samples = _array.array("h", raw)
+
+    if channels > 1:
+        mono = _array.array("h")
+        for i in range(0, len(samples), channels):
+            mono.append(sum(samples[i : i + channels]) // channels)
+    else:
+        mono = samples
+
+    step = max(1, round(samplerate / _TARGET_RATE))
+    decimated = _array.array("h", mono[::step])
+    actual_rate = samplerate // step
+
+    return decimated.tobytes(), actual_rate
 
 
 def _get_loopback_device(p: pyaudio.PyAudio) -> dict:
@@ -49,12 +69,14 @@ def record(stop_event: threading.Event) -> bytes:
         stream.stop_stream()
         stream.close()
 
+    pcm, out_rate = _to_mono_16k(b"".join(frames), channels, samplerate)
+
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wf:
-        wf.setnchannels(channels)
+        wf.setnchannels(1)
         wf.setsampwidth(2)
-        wf.setframerate(samplerate)
-        wf.writeframes(b"".join(frames))
+        wf.setframerate(out_rate)
+        wf.writeframes(pcm)
     return buf.getvalue()
 
 
