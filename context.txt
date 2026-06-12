@@ -6,7 +6,7 @@ Background Python daemon for Windows with two hotkeys:
 **Right Shift + P — Screenshot mode:**
 1. Captures screenshot of the monitor where the cursor is
 2. Sends screenshot to Groq vision LLM (llama-4-scout-17b)
-3. Streams response into a dark terminal-style Tkinter popup on secondary monitor
+3. Streams response into a dark terminal-style Tkinter popup (secondary monitor by default, or primary with -P flag)
 
 **Right Alt + P — Audio mode (toggle):**
 1. First press: starts capturing system audio via WASAPI loopback ("🎙 Listening...")
@@ -41,7 +41,7 @@ Phonexi/
 │   ├── audio.py             # record() WASAPI loopback, transcribe() Groq Whisper
 │   ├── listener.py          # HotkeyListener: two hotkeys, toggle state machine
 │   └── ui.py                # ResultWindow: dark Tkinter popup with Markdown+syntax highlighting
-├── tests/                   # pytest suite (17 tests, all passing)
+├── tests/                   # pytest suite (25 tests, all passing)
 ├── requirements.txt
 ├── .env                     # NOT in git — contains GROQ_API_KEY=gsk_...
 └── .gitignore               # .env is excluded
@@ -71,7 +71,10 @@ Phonexi/
 
 ### Popup window
 - overrideredirect(True) → no title bar, no taskbar entry (discreet)
-- Always appears on secondary monitor (monitors[2] if exists, else monitors[1])
+- Target monitor chosen by ResultWindow._target_monitor() based on use_primary flag:
+  - use_primary=False (default): first non-primary monitor (fallback monitors[0] if single display)
+  - use_primary=True (-P/--primary CLI flag): the is_primary monitor
+- use_primary flows: main.py argparse → HotkeyListener(use_primary) → ResultWindow(use_primary)
 - Closes with Escape key
 - -topmost True to stay above other windows
 
@@ -126,8 +129,11 @@ pip install -r requirements.txt
 # Set up .env
 echo GROQ_API_KEY=gsk_your_key_here > .env
 
-# Run
+# Run (popup on secondary monitor — default)
 python main.py
+
+# Run with popup on primary monitor
+python main.py -P            # or --primary
 
 # Screenshot mode: Right Shift + P
 # Audio mode:      Right Alt + P (1st press = start, 2nd press = stop & analyze)
@@ -139,7 +145,7 @@ python main.py
 ## Tests
 ```bash
 python -m pytest tests/ -v
-# 17 tests, all passing
+# 25 tests, all passing
 ```
 
 ---
@@ -198,7 +204,7 @@ python main.py
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `GROQ_API_KEY not set` error | .env missing or empty | Create .env with key |
-| Popup appears on primary monitor | Only 1 monitor detected | Connect second monitor |
+| Popup appears on primary monitor | Only 1 monitor detected, or -P flag used | Connect second monitor, or omit -P |
 | Hotkey not detected | Another app captured Right Shift+P | Close conflicting app |
 | `ModuleNotFoundError` | venv not activated or deps not installed | Run `pip install -r requirements.txt` |
 | `GroqAPIError` 429 | Daily rate limit hit (14,400 req/day free) | Wait until next UTC day |

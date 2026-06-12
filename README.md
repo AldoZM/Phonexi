@@ -20,7 +20,7 @@ Discreet background daemon for Windows that captures screenshots or listens to s
 - Groq API free tier — 14,400 requests/day, no credit card required
 - Syntax highlighting (Dracula theme) for code blocks
 - Markdown formatting: headings, bold, italic, inline code
-- Popup on secondary monitor — discreet, no taskbar entry, no title bar
+- Popup on secondary monitor by default — discreet, no taskbar entry, no title bar (use `-P`/`--primary` to show it on the primary monitor)
 - Draggable window — click and drag to reposition
 - Replaces previous popup on repeated hotkey press
 
@@ -71,7 +71,7 @@ Phonexi/
 │   ├── audio.py          # WASAPI loopback capture + Whisper transcription
 │   ├── listener.py       # Hotkey detection + orchestration (two hotkeys)
 │   └── ui.py             # Dark draggable popup with syntax highlighting
-├── tests/                # pytest suite (17 tests)
+├── tests/                # pytest suite (25 tests)
 ├── requirements.txt
 ├── .env                  # NOT committed — add your key here
 └── context.txt           # Full project context for AI assistants
