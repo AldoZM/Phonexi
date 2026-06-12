@@ -93,11 +93,11 @@ class ResultWindow:
                 for mon in monitors:
                     if mon.get("is_primary", False):
                         return mon
-                return monitors[0]
+                return monitors[0]  # fallback: single-display machine
             for mon in monitors:
                 if not mon.get("is_primary", False):
                     return mon
-            return monitors[0]
+            return monitors[0]  # fallback: single-display machine
 
     def _resolve_font(self) -> tuple:
         available = tkfont.families()
