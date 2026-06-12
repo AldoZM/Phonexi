@@ -53,6 +53,12 @@ GROQ_API_KEY=gsk_your_key_here
 python main.py
 ```
 
+Show the popup on the **primary** monitor instead of the secondary:
+
+```bash
+python main.py -P
+```
+
 ## Project Structure
 
 ```
