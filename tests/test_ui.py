@@ -1,5 +1,6 @@
 import tkinter as tk
 import pytest
+from unittest.mock import patch
 from phonexi.ui import ResultWindow
 
 
@@ -50,3 +51,45 @@ def test_insert_appends_text(root):
     content = win._text.get("1.0", tk.END)
     assert "hello world" in content
     win._win.destroy()
+
+
+_VIRTUAL   = {"left": 0, "top": 0, "width": 100, "height": 100}
+_PRIMARY   = {"left": 0, "top": 0, "width": 1920, "height": 1080, "is_primary": True}
+_SECONDARY = {"left": 1920, "top": 0, "width": 1920, "height": 1080, "is_primary": False}
+
+
+def _patch_monitors(monitors):
+    p = patch("phonexi.ui.mss.MSS")
+    mock = p.start()
+    mock.return_value.__enter__.return_value.monitors = monitors
+    return p
+
+
+def test_target_monitor_primary(root):
+    p = _patch_monitors([_VIRTUAL, _PRIMARY, _SECONDARY])
+    try:
+        win = ResultWindow(root, use_primary=True)
+        assert win._target_monitor() == _PRIMARY
+        win._win.destroy()
+    finally:
+        p.stop()
+
+
+def test_target_monitor_secondary_default(root):
+    p = _patch_monitors([_VIRTUAL, _PRIMARY, _SECONDARY])
+    try:
+        win = ResultWindow(root)
+        assert win._target_monitor() == _SECONDARY
+        win._win.destroy()
+    finally:
+        p.stop()
+
+
+def test_target_monitor_single_display_fallback(root):
+    p = _patch_monitors([_VIRTUAL, _PRIMARY])
+    try:
+        win = ResultWindow(root, use_primary=False)
+        assert win._target_monitor() == _PRIMARY
+        win._win.destroy()
+    finally:
+        p.stop()
