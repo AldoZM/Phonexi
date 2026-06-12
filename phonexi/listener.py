@@ -12,8 +12,9 @@ class HotkeyListener:
     _SCREENSHOT_MOD = keyboard.Key.shift_r   # Right Shift + P → screenshot
     _AUDIO_MOD      = keyboard.Key.alt_gr    # Right Alt   + P → toggle recording
 
-    def __init__(self, tk_root) -> None:
+    def __init__(self, tk_root, use_primary: bool = False) -> None:
         self._tk_root = tk_root
+        self._use_primary = use_primary
         self._pressed: set = set()
         self._lock = threading.Lock()
         self._current_window = None
@@ -74,7 +75,7 @@ class HotkeyListener:
     def _start_capture(self) -> None:
         self._close_current()
         path = capture()
-        win = ResultWindow(self._tk_root)
+        win = ResultWindow(self._tk_root, use_primary=self._use_primary)
         self._current_window = win
         threading.Thread(target=self._stream_image, args=(path, win), daemon=True).start()
 
@@ -107,7 +108,7 @@ class HotkeyListener:
 
     def _open_recording_popup(self) -> None:
         self._close_current()
-        win = ResultWindow(self._tk_root)
+        win = ResultWindow(self._tk_root, use_primary=self._use_primary)
         self._current_window = win
         win.show_status("🎙 Listening...")
 

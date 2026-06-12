@@ -19,8 +19,9 @@ class ResultWindow:
     _HEIGHT = 500
     _FONT_CANDIDATES = ("Cascadia Code", "Consolas", "Courier New")
 
-    def __init__(self, root: tk.Tk) -> None:
+    def __init__(self, root: tk.Tk, use_primary: bool = False) -> None:
         self._root = root
+        self._use_primary = use_primary
         self._win = tk.Toplevel(root)
         self._win.title("Phonexi")
         self._win.configure(bg=self._BG)
@@ -49,7 +50,7 @@ class ResultWindow:
         self._setup_tags()
 
         self._win.update_idletasks()
-        mon = self._secondary_monitor()
+        mon = self._target_monitor()
         x = mon["left"] + (mon["width"] - self._WIDTH) // 2
         y = mon["top"] + (mon["height"] - self._HEIGHT) // 2
         self._win.geometry(f"{self._WIDTH}x{self._HEIGHT}+{x}+{y}")
@@ -85,13 +86,18 @@ class ResultWindow:
         self._text.tag_configure("s_dec",   foreground="#50fa7b")
         self._text.tag_configure("divider", foreground="#8be9fd")
 
-    def _secondary_monitor(self) -> dict:
+    def _target_monitor(self) -> dict:
         with mss.MSS() as sct:
             monitors = sct.monitors[1:]  # skip virtual combined (index 0)
+            if self._use_primary:
+                for mon in monitors:
+                    if mon.get("is_primary", False):
+                        return mon
+                return monitors[0]  # fallback: single-display machine
             for mon in monitors:
                 if not mon.get("is_primary", False):
                     return mon
-            return monitors[0]
+            return monitors[0]  # fallback: single-display machine
 
     def _resolve_font(self) -> tuple:
         available = tkfont.families()
