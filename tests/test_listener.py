@@ -29,7 +29,7 @@ def test_start_capture_calls_capture_and_creates_window(root):
         listener._start_capture()
 
         mock_capture.assert_called_once()
-        mock_window_cls.assert_called_once_with(root)
+        mock_window_cls.assert_called_once_with(root, use_primary=False)
 
 
 def test_stream_image_calls_process_and_show(root):
@@ -68,3 +68,26 @@ def test_stream_image_handles_generic_error(root):
 
     root.update()
     mock_win.show_error.assert_called_once_with("Error: network fail")
+
+
+def test_start_capture_forwards_use_primary(root):
+    listener = HotkeyListener(tk_root=root, use_primary=True)
+
+    with patch("phonexi.listener.capture", return_value=MagicMock()), \
+         patch("phonexi.listener.ResultWindow") as mock_window_cls, \
+         patch.object(listener, "_stream_image"):
+
+        mock_window_cls.return_value = MagicMock()
+        listener._start_capture()
+
+        mock_window_cls.assert_called_once_with(root, use_primary=True)
+
+
+def test_open_recording_popup_forwards_use_primary(root):
+    listener = HotkeyListener(tk_root=root, use_primary=True)
+
+    with patch("phonexi.listener.ResultWindow") as mock_window_cls:
+        mock_window_cls.return_value = MagicMock()
+        listener._open_recording_popup()
+
+        mock_window_cls.assert_called_once_with(root, use_primary=True)
