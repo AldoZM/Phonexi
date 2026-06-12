@@ -58,38 +58,25 @@ _PRIMARY   = {"left": 0, "top": 0, "width": 1920, "height": 1080, "is_primary": 
 _SECONDARY = {"left": 1920, "top": 0, "width": 1920, "height": 1080, "is_primary": False}
 
 
-def _patch_monitors(monitors):
-    p = patch("phonexi.ui.mss.MSS")
-    mock = p.start()
-    mock.return_value.__enter__.return_value.monitors = monitors
-    return p
-
-
 def test_target_monitor_primary(root):
-    p = _patch_monitors([_VIRTUAL, _PRIMARY, _SECONDARY])
-    try:
+    with patch("phonexi.ui.mss.MSS") as mock_mss:
+        mock_mss.return_value.__enter__.return_value.monitors = [_VIRTUAL, _PRIMARY, _SECONDARY]
         win = ResultWindow(root, use_primary=True)
         assert win._target_monitor() == _PRIMARY
         win._win.destroy()
-    finally:
-        p.stop()
 
 
 def test_target_monitor_secondary_default(root):
-    p = _patch_monitors([_VIRTUAL, _PRIMARY, _SECONDARY])
-    try:
+    with patch("phonexi.ui.mss.MSS") as mock_mss:
+        mock_mss.return_value.__enter__.return_value.monitors = [_VIRTUAL, _PRIMARY, _SECONDARY]
         win = ResultWindow(root)
         assert win._target_monitor() == _SECONDARY
         win._win.destroy()
-    finally:
-        p.stop()
 
 
 def test_target_monitor_single_display_fallback(root):
-    p = _patch_monitors([_VIRTUAL, _PRIMARY])
-    try:
+    with patch("phonexi.ui.mss.MSS") as mock_mss:
+        mock_mss.return_value.__enter__.return_value.monitors = [_VIRTUAL, _PRIMARY]
         win = ResultWindow(root, use_primary=False)
         assert win._target_monitor() == _PRIMARY
         win._win.destroy()
-    finally:
-        p.stop()
