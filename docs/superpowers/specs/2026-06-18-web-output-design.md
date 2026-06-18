@@ -68,6 +68,10 @@ persistente, acceso desde fuera de la LAN.
 - Se agrega `close()` a `ResultWindow` que hace `self._win.destroy()`.
 - Ambas vistas cumplen: `show_status` / `show_and_collect` / `show_error` /
   `close`.
+- El listener marshalea sus callbacks vía `_schedule(fn, *args)`: con tkinter
+  usa `tk_root.after(0, ...)` (igual que hoy); sin tkinter (web, `tk_root=None`)
+  llama `fn(*args)` directo (el `WebServer` ya es thread-safe). Reemplaza todos
+  los `self._tk_root.after(0, ...)` actuales.
 
 ### Detección de IP LAN
 
@@ -80,10 +84,12 @@ Formato por evento: `event: <tipo>\ndata: <json>\n\n`
 
 | Evento     | Payload                       | Cuándo |
 |------------|-------------------------------|--------|
-| `status`   | `{"text": "🎙 Listening..."}` | inicio captura / "Analyzing..." |
-| `question` | `{"text": "<transcripción>"}` | modo audio, tras transcribir |
+| `status`   | `{"text": "🎙 Listening..."}` | inicio captura / "Analyzing..." / pregunta transcrita (`❓ ...`) |
 | `response` | `{"markdown": "<respuesta>"}` | respuesta completa del LLM |
 | `error`    | `{"text": "<mensaje>"}`       | error Groq / captura / etc. |
+
+Nota: la pregunta transcrita (modo audio) llega como evento `status` —
+el listener ya la enruta por `show_status`, no se agrega un evento separado.
 
 El cliente JS escucha cada tipo y actualiza el DOM. `response` se renderiza con
 marked.js (markdown) + highlight.js (código, tema oscuro tipo Dracula).
