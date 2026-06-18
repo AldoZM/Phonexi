@@ -14,7 +14,15 @@ Background Python daemon for Windows with two hotkeys:
 - Captures audio from the default output device (headphones/speakers)
 - Designed to listen to the interviewer's voice on a call, not the user's mic
 
-Primary use case: discreet coding/interview assistant — captures screen or listens to a call and provides instant AI responses on a secondary monitor.
+**Output target (popup vs web):**
+- Default: dark Tkinter popup on a secondary (or primary with -P) monitor.
+- `-w`/`--web`: instead of the popup, serves answers on a local HTTP server.
+  On startup it prints a QR (ASCII) + LAN/localhost URLs; scan the QR with a phone
+  on the same WiFi. The page auto-updates via SSE as hotkeys fire. No tkinter in
+  this mode → nothing appears on a shared screen. Use when screen-sharing or on a
+  single monitor.
+
+Primary use case: discreet coding/interview assistant — captures screen or listens to a call and provides instant AI responses on a secondary monitor or on your phone.
 
 ---
 
@@ -25,8 +33,11 @@ Primary use case: discreet coding/interview assistant — captures screen or lis
 - groq (Python SDK) — vision LLM + text LLM + Whisper transcription via Groq API
 - pyaudiowpatch — WASAPI loopback audio capture (system audio, not microphone)
 - Tkinter Toplevel — dark popup UI (overrideredirect=True, no taskbar entry)
-- pygments — syntax highlighting inside code blocks
+- pygments — syntax highlighting inside code blocks (popup mode)
 - python-dotenv — load GROQ_API_KEY from .env
+- http.server (ThreadingHTTPServer) + SSE — web mode local server (stdlib, no framework)
+- qrcode — ASCII QR of the LAN URL printed in the terminal (web mode)
+- marked.js + highlight.js (CDN) — markdown + syntax highlighting on the phone page
 
 ---
 
@@ -39,9 +50,10 @@ Phonexi/
 │   ├── screenshot.py        # Captures monitor where cursor is using mss + ctypes
 │   ├── processor.py         # process() vision, process_text() text — both stream tokens
 │   ├── audio.py             # record() WASAPI loopback, transcribe() Groq Whisper
-│   ├── listener.py          # HotkeyListener: two hotkeys, toggle state machine
-│   └── ui.py                # ResultWindow: dark Tkinter popup with Markdown+syntax highlighting
-├── tests/                   # pytest suite (25 tests, all passing)
+│   ├── listener.py          # HotkeyListener: two hotkeys, toggle state machine; view_factory + _schedule
+│   ├── ui.py                # ResultWindow: dark Tkinter popup with Markdown+syntax highlighting
+│   └── webserver.py         # Web mode: Broadcaster (SSE fan-out), WebView, WebServer, lan_ip, QR helpers
+├── tests/                   # pytest suite (47 tests, all passing)
 ├── requirements.txt
 ├── .env                     # NOT in git — contains GROQ_API_KEY=gsk_...
 └── .gitignore               # .env is excluded
@@ -91,6 +103,25 @@ Phonexi/
 - Drag offset calculated from x_root/y_root - winfo_x/y
 - Works despite overrideredirect(True) removing native title bar
 
+### Web output mode (-w/--web)
+- Listener is view-agnostic: HotkeyListener takes a view_factory (default builds ResultWindow;
+  web builds WebView) and marshals callbacks via _schedule(fn, *args) — tk_root.after when tkinter
+  is present, direct call when tk_root is None (web). Same hotkey logic for both outputs.
+- WebView mirrors ResultWindow's public API (show_status/show_error/show_and_collect/show/close)
+  and publishes events to a shared WebServer instead of drawing.
+- WebServer = ThreadingHTTPServer with daemon_threads=True. Routes: GET / → dark HTML page
+  (EventSource('/events'), marked.js + highlight.js); GET /events → SSE stream.
+- Broadcaster: thread-safe fan-out, one queue.Queue per client, lock-guarded; stores the last
+  event and replays it to clients that connect late (or reconnect after WiFi drop).
+- SSE events: status {text}, response {markdown}, error {text}. The transcribed question arrives
+  as a status event (no separate event type).
+- Port selection: find_free_port tries 8000..8010. lan_ip() opens a UDP socket to pick the route
+  IP; falls back to "localhost". stop() guards shutdown() with a _started flag and calls
+  server_close() to release the socket.
+- _print_qr reconfigures stdout to UTF-8 (try/except) so the block glyphs (█) don't crash on a
+  Windows cp1252 console.
+- Security: server binds 0.0.0.0 with no auth — intended for a trusted/personal WiFi only.
+
 ### Interview-style prompt
 - Responds in the same language as the question (auto-detected)
 - Tone: confident senior developer answering in a technical interview
@@ -135,6 +166,9 @@ python main.py
 # Run with popup on primary monitor
 python main.py -P            # or --primary
 
+# Run in web mode (read answers on your phone via QR, same WiFi)
+python main.py -w            # or --web
+
 # Screenshot mode: Right Shift + P
 # Audio mode:      Right Alt + P (1st press = start, 2nd press = stop & analyze)
 # Close popup:     Escape
@@ -145,7 +179,7 @@ python main.py -P            # or --primary
 ## Tests
 ```bash
 python -m pytest tests/ -v
-# 25 tests, all passing
+# 47 tests, all passing
 ```
 
 ---
@@ -211,3 +245,6 @@ python main.py
 | Audio stays on "Listening..." | Second Alt+P not detected | Press again firmly |
 | "No loopback device found" | No WASAPI loopback device available | Ensure audio plays through default output device |
 | Audio mode transcribes silence | Nothing playing through speakers | Make sure the call audio routes through the default output device |
+| (web) QR shows as boxes/garbage | Console font/codepage can't render block glyphs | Use Windows Terminal; the program already forces UTF-8 output |
+| (web) phone can't open the URL | Phone not on the same WiFi, or firewall blocks the port | Join the same network; allow Python through the Windows firewall |
+| (web) page stuck on "Waiting for Phonexi..." | No hotkey fired yet, or SSE blocked | Trigger a hotkey on the PC; refresh once if needed |

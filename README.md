@@ -15,6 +15,7 @@ Discreet background daemon for Windows that captures screenshots or listens to s
 
 - **Screenshot mode** — captures only the monitor where your cursor is
 - **Audio mode** — captures system audio via WASAPI loopback (hears the interviewer on a call, not your mic)
+- **Web mode (`-w`)** — serves answers to your phone over the LAN (scan a terminal QR), auto-updating via SSE; nothing shows on a shared screen
 - **Interview-style responses** — direct, confident, no filler
 - **Responds in the question's language** — Spanish question → Spanish answer
 - Groq API free tier — 14,400 requests/day, no credit card required
@@ -59,6 +60,19 @@ Show the popup on the **primary** monitor instead of the secondary:
 python main.py -P
 ```
 
+Serve responses to your **phone** instead of an on-screen popup (useful when
+screen-sharing or on a single monitor):
+
+```bash
+python main.py -w
+```
+
+Phonexi prints a QR code and the LAN URL in the terminal. Scan the QR with your
+phone (same WiFi) — responses appear in the browser, auto-updating via SSE.
+No popup is shown on the shared screen. The hotkeys are unchanged.
+**Note:** the server has no authentication; use it on a personal hotspot or a
+trusted network, not on corporate or monitored WiFi.
+
 ## Project Structure
 
 ```
@@ -69,9 +83,10 @@ Phonexi/
 │   ├── screenshot.py     # Per-monitor screenshot capture
 │   ├── processor.py      # Groq vision + text LLM streaming
 │   ├── audio.py          # WASAPI loopback capture + Whisper transcription
-│   ├── listener.py       # Hotkey detection + orchestration (two hotkeys)
-│   └── ui.py             # Dark draggable popup with syntax highlighting
-├── tests/                # pytest suite (25 tests)
+│   ├── listener.py       # Hotkey detection + orchestration (view-agnostic via view_factory)
+│   ├── ui.py             # Dark draggable popup with syntax highlighting
+│   └── webserver.py      # Web mode: local HTTP + SSE, QR, phone-readable page
+├── tests/                # pytest suite (47 tests)
 ├── requirements.txt
 ├── .env                  # NOT committed — add your key here
 └── context.txt           # Full project context for AI assistants
@@ -81,7 +96,7 @@ Phonexi/
 
 - Windows 10/11
 - Python 3.10+
-- 2+ monitors recommended (popup appears on secondary monitor)
+- 2+ monitors recommended for popup mode (or use `-w` web mode with a phone on the same WiFi — no second monitor needed)
 
 ## Tests
 

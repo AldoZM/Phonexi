@@ -29,6 +29,9 @@ env/
 screenshots/*
 !screenshots/.gitkeep
 
+# Local backups
+*_backup.txt
+
 # OS
 .DS_Store
 Thumbs.db
