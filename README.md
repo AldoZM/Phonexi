@@ -59,6 +59,17 @@ Show the popup on the **primary** monitor instead of the secondary:
 python main.py -P
 ```
 
+Serve responses to your **phone** instead of an on-screen popup (useful when
+screen-sharing or on a single monitor):
+
+```bash
+python main.py -w
+```
+
+Phonexi prints a QR code and the LAN URL in the terminal. Scan the QR with your
+phone (same WiFi) — responses appear in the browser, auto-updating via SSE.
+No popup is shown on the shared screen. The hotkeys are unchanged.
+
 ## Project Structure
 
 ```
