@@ -24,7 +24,12 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _print_qr(url: str) -> None:
+    import sys
     import qrcode
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
     qr = qrcode.QRCode(border=1)
     qr.add_data(url)
     qr.make()

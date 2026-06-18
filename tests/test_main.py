@@ -1,3 +1,4 @@
+import io
 import sys
 from unittest.mock import patch
 
@@ -51,3 +52,11 @@ def test_main_web_mode_starts_server_and_listener():
         mock_server_cls.return_value.start.assert_called_once()
         mock_listener_cls.return_value.start.assert_called_once()
         mock_tk.assert_not_called()  # web mode never touches tkinter
+
+
+def test_print_qr_survives_cp1252_console(monkeypatch):
+    # Simulate a Windows cp1252 console that cannot encode block glyphs.
+    fake_stdout = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+    monkeypatch.setattr(sys, "stdout", fake_stdout)
+    # Must not raise UnicodeEncodeError.
+    main._print_qr("http://192.168.1.42:8000")
