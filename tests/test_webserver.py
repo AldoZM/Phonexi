@@ -78,3 +78,36 @@ def test_webview_show_and_collect_joins_and_returns():
 
 def test_webview_close_is_noop():
     WebView(MagicMock()).close()  # must not raise
+
+
+import urllib.request
+
+from phonexi.webserver import WebServer, INDEX_HTML
+
+
+def test_index_html_references_eventsource_and_libs():
+    assert "EventSource('/events')" in INDEX_HTML
+    assert "marked" in INDEX_HTML
+    assert "highlight" in INDEX_HTML
+
+
+def test_webserver_picks_port_and_serves_index():
+    server = WebServer(host="127.0.0.1")
+    server.start()
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{server.port}/", timeout=5
+        ) as resp:
+            body = resp.read().decode()
+            assert resp.status == 200
+            assert "EventSource('/events')" in body
+    finally:
+        server.stop()
+
+
+def test_webserver_publish_delegates_to_broadcaster():
+    server = WebServer(host="127.0.0.1")
+    q = server.broadcaster.register()
+    server.publish("status", {"text": "z"})
+    assert q.get_nowait() == ("status", {"text": "z"})
+    server.stop()
