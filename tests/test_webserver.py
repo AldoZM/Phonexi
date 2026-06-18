@@ -1,7 +1,7 @@
 import socket
 from unittest.mock import patch
 
-from phonexi.webserver import lan_ip, find_free_port, format_sse
+from phonexi.webserver import lan_ip, find_free_port, format_sse, Broadcaster
 
 
 def test_format_sse_shape():
@@ -31,3 +31,27 @@ def test_find_free_port_skips_taken():
         taken.listen()
         port = find_free_port(start=taken_port, end=taken_port + 5)
         assert taken_port < port <= taken_port + 5
+
+
+def test_broadcaster_publish_reaches_all_clients():
+    b = Broadcaster()
+    q1 = b.register()
+    q2 = b.register()
+    b.publish("status", {"text": "x"})
+    assert q1.get_nowait() == ("status", {"text": "x"})
+    assert q2.get_nowait() == ("status", {"text": "x"})
+
+
+def test_broadcaster_new_client_gets_last_event():
+    b = Broadcaster()
+    b.publish("response", {"markdown": "**hi**"})
+    q = b.register()
+    assert q.get_nowait() == ("response", {"markdown": "**hi**"})
+
+
+def test_broadcaster_unregister_stops_delivery():
+    b = Broadcaster()
+    q = b.register()
+    b.unregister(q)
+    b.publish("status", {"text": "y"})
+    assert q.empty()
