@@ -54,6 +54,7 @@ def _run_web() -> None:
         listener.start()  # blocks on keyboard listener
     except KeyboardInterrupt:
         print("\n[Phonexi] Stopped.")
+    finally:
         server.stop()
 
 

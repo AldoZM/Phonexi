@@ -157,6 +157,7 @@ class WebServer:
         self.host = host
         self.port = port if port is not None else find_free_port()
         self._httpd = ThreadingHTTPServer((host, self.port), _make_handler(self.broadcaster))
+        self._httpd.daemon_threads = True
         self._started = False
 
     def start(self) -> None:

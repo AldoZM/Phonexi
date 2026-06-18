@@ -35,9 +35,6 @@ def test_parse_args_web_default_false():
         assert main._parse_args().web is False
 
 
-from unittest.mock import MagicMock
-
-
 def test_main_web_mode_starts_server_and_listener():
     argv = ["main.py", "--web"]
     with patch.object(sys, "argv", argv), \

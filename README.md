@@ -69,6 +69,8 @@ python main.py -w
 Phonexi prints a QR code and the LAN URL in the terminal. Scan the QR with your
 phone (same WiFi) — responses appear in the browser, auto-updating via SSE.
 No popup is shown on the shared screen. The hotkeys are unchanged.
+**Note:** the server has no authentication; use it on a personal hotspot or a
+trusted network, not on corporate or monitored WiFi.
 
 ## Project Structure
 
