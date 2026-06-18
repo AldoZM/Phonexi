@@ -49,9 +49,15 @@ def _run_web() -> None:
           f"  http://localhost:{server.port}\n"
           "Right Shift + P to capture. Ctrl+C to quit.")
 
+    # Run the keyboard listener on a daemon thread and block the main thread on
+    # an interruptible join loop — a bare listener.join() on the main thread is
+    # not interruptible by Ctrl+C on Windows, so the process wouldn't quit.
     listener = HotkeyListener(tk_root=None, view_factory=lambda: WebView(server))
+    t = threading.Thread(target=listener.start, daemon=True)
+    t.start()
     try:
-        listener.start()  # blocks on keyboard listener
+        while t.is_alive():
+            t.join(timeout=0.5)
     except KeyboardInterrupt:
         print("\n[Phonexi] Stopped.")
     finally:

@@ -2,7 +2,10 @@ import socket
 import urllib.request
 from unittest.mock import MagicMock, patch
 
-from phonexi.webserver import lan_ip, find_free_port, format_sse, Broadcaster, WebView, WebServer, INDEX_HTML
+from phonexi.webserver import (
+    lan_ip, find_free_port, format_sse, Broadcaster, WebView, WebServer,
+    INDEX_HTML, _QuietThreadingHTTPServer,
+)
 
 
 def test_format_sse_shape():
@@ -107,3 +110,26 @@ def test_webserver_publish_delegates_to_broadcaster():
     server.publish("status", {"text": "z"})
     assert q.get_nowait() == ("status", {"text": "z"})
     server.stop()
+
+
+def test_quiet_server_swallows_client_disconnect():
+    # A phone closing an SSE stream raises ConnectionResetError in the handler
+    # thread; handle_error must not re-raise or dump a traceback for it.
+    srv = _QuietThreadingHTTPServer.__new__(_QuietThreadingHTTPServer)
+    try:
+        raise ConnectionResetError()
+    except ConnectionResetError:
+        srv.handle_error(None, ("192.168.1.8", 50560))  # must not raise
+
+
+def test_quiet_server_reports_real_errors():
+    srv = _QuietThreadingHTTPServer.__new__(_QuietThreadingHTTPServer)
+    called = {}
+    # A genuine error must still reach the base handler.
+    with patch("http.server.ThreadingHTTPServer.handle_error",
+               side_effect=lambda *a: called.setdefault("hit", True)):
+        try:
+            raise ValueError("real bug")
+        except ValueError:
+            srv.handle_error(None, ("192.168.1.8", 50560))
+    assert called.get("hit") is True

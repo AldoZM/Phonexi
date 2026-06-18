@@ -1,9 +1,23 @@
 import json
 import queue
 import socket
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Iterator
+
+
+class _QuietThreadingHTTPServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer that doesn't dump a traceback when a client
+    (e.g. a phone closing an SSE stream) drops the connection."""
+
+    daemon_threads = True
+
+    def handle_error(self, request, client_address) -> None:
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError)):
+            return  # client disconnected — expected, not an error
+        super().handle_error(request, client_address)
 
 
 def lan_ip() -> str:
@@ -156,8 +170,7 @@ class WebServer:
         self.broadcaster = Broadcaster()
         self.host = host
         self.port = port if port is not None else find_free_port()
-        self._httpd = ThreadingHTTPServer((host, self.port), _make_handler(self.broadcaster))
-        self._httpd.daemon_threads = True
+        self._httpd = _QuietThreadingHTTPServer((host, self.port), _make_handler(self.broadcaster))
         self._started = False
 
     def start(self) -> None:
