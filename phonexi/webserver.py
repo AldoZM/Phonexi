@@ -162,15 +162,12 @@ class WebServer:
     def start(self) -> None:
         self._started = True
         ready = threading.Event()
-        original_service_actions = self._httpd.service_actions
 
-        def _signal_on_first_iteration():
+        def _serve() -> None:
             ready.set()
-            self._httpd.service_actions = original_service_actions  # restore
-            original_service_actions()
+            self._httpd.serve_forever()
 
-        self._httpd.service_actions = _signal_on_first_iteration
-        threading.Thread(target=self._httpd.serve_forever, daemon=True).start()
+        threading.Thread(target=_serve, daemon=True).start()
         ready.wait(timeout=5)
 
     def publish(self, event: str, payload: dict) -> None:

@@ -1,7 +1,8 @@
 import socket
+import urllib.request
 from unittest.mock import MagicMock, patch
 
-from phonexi.webserver import lan_ip, find_free_port, format_sse, Broadcaster, WebView
+from phonexi.webserver import lan_ip, find_free_port, format_sse, Broadcaster, WebView, WebServer, INDEX_HTML
 
 
 def test_format_sse_shape():
@@ -78,11 +79,6 @@ def test_webview_show_and_collect_joins_and_returns():
 
 def test_webview_close_is_noop():
     WebView(MagicMock()).close()  # must not raise
-
-
-import urllib.request
-
-from phonexi.webserver import WebServer, INDEX_HTML
 
 
 def test_index_html_references_eventsource_and_libs():
