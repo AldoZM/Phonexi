@@ -91,3 +91,19 @@ def test_open_recording_popup_forwards_use_primary(root):
         listener._open_recording_popup()
 
         mock_window_cls.assert_called_once_with(root, use_primary=True)
+
+
+def test_view_factory_used_for_views():
+    fake_view = MagicMock()
+    listener = HotkeyListener(tk_root=None, view_factory=lambda: fake_view)
+    with patch("phonexi.listener.capture", return_value=MagicMock()), \
+         patch.object(listener, "_stream_image"):
+        listener._start_capture()
+    assert listener._current_window is fake_view
+
+
+def test_schedule_runs_inline_without_tk():
+    listener = HotkeyListener(tk_root=None, view_factory=lambda: MagicMock())
+    called = []
+    listener._schedule(lambda x: called.append(x), 7)
+    assert called == [7]

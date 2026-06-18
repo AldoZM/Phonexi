@@ -245,3 +245,9 @@ class ResultWindow:
 
     def show_error(self, msg: str) -> None:
         self._ins(f"> {msg}", "err")
+
+    def close(self) -> None:
+        try:
+            self._win.destroy()
+        except Exception:
+            pass

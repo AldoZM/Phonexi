@@ -12,9 +12,12 @@ class HotkeyListener:
     _SCREENSHOT_MOD = keyboard.Key.shift_r   # Right Shift + P → screenshot
     _AUDIO_MOD      = keyboard.Key.alt_gr    # Right Alt   + P → toggle recording
 
-    def __init__(self, tk_root, use_primary: bool = False) -> None:
+    def __init__(self, tk_root=None, use_primary: bool = False, view_factory=None) -> None:
         self._tk_root = tk_root
         self._use_primary = use_primary
+        self._view_factory = view_factory or (
+            lambda: ResultWindow(self._tk_root, use_primary=self._use_primary)
+        )
         self._pressed: set = set()
         self._lock = threading.Lock()
         self._current_window = None
@@ -25,6 +28,12 @@ class HotkeyListener:
         self._screenshot_cooldown = False
         self._context: Context | None = None
 
+    def _schedule(self, fn, *args) -> None:
+        if self._tk_root is not None:
+            self._tk_root.after(0, fn, *args)
+        else:
+            fn(*args)
+
     # ── key events ──────────────────────────────────────────────────────────
 
     def _on_press(self, key) -> None:
@@ -32,7 +41,7 @@ class HotkeyListener:
             self._pressed.add(key)
 
         if key == keyboard.Key.esc:
-            self._tk_root.after(0, self._close_current)
+            self._schedule(self._close_current)
             return
 
         # Only trigger when P itself is pressed — avoids firing on modifier-only press
@@ -70,12 +79,12 @@ class HotkeyListener:
     # ── screenshot flow (Right Shift + P) ───────────────────────────────────
 
     def _on_screenshot_hotkey(self) -> None:
-        self._tk_root.after(0, self._start_capture)
+        self._schedule(self._start_capture)
 
     def _start_capture(self) -> None:
         self._close_current()
         path = capture()
-        win = ResultWindow(self._tk_root, use_primary=self._use_primary)
+        win = self._view_factory()
         self._current_window = win
         threading.Thread(target=self._stream_image, args=(path, win), daemon=True).start()
 
@@ -88,18 +97,18 @@ class HotkeyListener:
                     assistant_turn=response,
                 )
         except GroqNotConfiguredError:
-            self._tk_root.after(0, win.show_error, "GROQ_API_KEY not set — add it to .env")
+            self._schedule(win.show_error, "GROQ_API_KEY not set — add it to .env")
         except GroqAPIError as exc:
-            self._tk_root.after(0, win.show_error, f"Groq error: {exc}")
+            self._schedule(win.show_error, f"Groq error: {exc}")
         except Exception as exc:
-            self._tk_root.after(0, win.show_error, f"Error: {exc}")
+            self._schedule(win.show_error, f"Error: {exc}")
 
     # ── audio flow (Right Alt + P, toggle) ──────────────────────────────────
 
     def _on_audio_start(self) -> None:
         self._recording = True
         self._record_stop = threading.Event()
-        self._tk_root.after(0, self._open_recording_popup)
+        self._schedule(self._open_recording_popup)
         threading.Thread(
             target=self._record_worker,
             args=(self._record_stop,),
@@ -108,7 +117,7 @@ class HotkeyListener:
 
     def _open_recording_popup(self) -> None:
         self._close_current()
-        win = ResultWindow(self._tk_root, use_primary=self._use_primary)
+        win = self._view_factory()
         self._current_window = win
         win.show_status("🎙 Listening...")
 
@@ -123,46 +132,46 @@ class HotkeyListener:
         except Exception as exc:
             win = self._current_window
             if win:
-                self._tk_root.after(0, win.show_error, f"Audio capture error: {exc}")
+                self._schedule(win.show_error, f"Audio capture error: {exc}")
             return
 
         win = self._current_window
         if win is None:
             return
 
-        self._tk_root.after(0, win.show_status, "⏳ Analyzing...")
+        self._schedule(win.show_status, "⏳ Analyzing...")
 
         try:
             text = transcribe(wav_bytes)
         except Exception as exc:
             if win is self._current_window:
-                self._tk_root.after(0, win.show_error, f"Transcription error: {exc}")
+                self._schedule(win.show_error, f"Transcription error: {exc}")
             return
 
         if not text:
             if win is self._current_window:
-                self._tk_root.after(0, win.show_error, "No speech detected")
+                self._schedule(win.show_error, "No speech detected")
             return
 
         if win is self._current_window:
-            self._tk_root.after(0, win.show_status, f"❓ {text}\n")
+            self._schedule(win.show_status, f"❓ {text}\n")
         try:
             response = win.show_and_collect(process_text(text, context=self._context))
             if response:
                 self._context = Context(user_turn=text, assistant_turn=response)
         except GroqNotConfiguredError:
-            self._tk_root.after(0, win.show_error, "GROQ_API_KEY not set — add it to .env")
+            self._schedule(win.show_error, "GROQ_API_KEY not set — add it to .env")
         except GroqAPIError as exc:
-            self._tk_root.after(0, win.show_error, f"Groq error: {exc}")
+            self._schedule(win.show_error, f"Groq error: {exc}")
         except Exception as exc:
-            self._tk_root.after(0, win.show_error, f"Error: {exc}")
+            self._schedule(win.show_error, f"Error: {exc}")
 
     # ── helpers ──────────────────────────────────────────────────────────────
 
     def _close_current(self) -> None:
         if self._current_window is not None:
             try:
-                self._current_window._win.destroy()
+                self._current_window.close()
             except Exception:
                 pass
             self._current_window = None

@@ -80,3 +80,9 @@ def test_target_monitor_single_display_fallback(root):
         win = ResultWindow(root, use_primary=False)
         assert win._target_monitor() == _PRIMARY
         win._win.destroy()
+
+
+def test_result_window_close_destroys(root):
+    win = ResultWindow(root)
+    win.close()
+    assert not win._win.winfo_exists()
