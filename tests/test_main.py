@@ -17,3 +17,18 @@ def test_parse_args_long_flag():
 def test_parse_args_default_false():
     with patch.object(sys, "argv", ["main.py"]):
         assert main._parse_args().primary is False
+
+
+def test_parse_args_web_short_flag():
+    with patch.object(sys, "argv", ["main.py", "-w"]):
+        assert main._parse_args().web is True
+
+
+def test_parse_args_web_long_flag():
+    with patch.object(sys, "argv", ["main.py", "--web"]):
+        assert main._parse_args().web is True
+
+
+def test_parse_args_web_default_false():
+    with patch.object(sys, "argv", ["main.py"]):
+        assert main._parse_args().web is False

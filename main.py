@@ -14,6 +14,12 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Show the popup on the primary monitor (default: secondary).",
     )
+    parser.add_argument(
+        "-w", "--web",
+        action="store_true",
+        help="Serve responses on a local web server (read on your phone via QR) "
+             "instead of the on-screen popup.",
+    )
     return parser.parse_args()
 
 
