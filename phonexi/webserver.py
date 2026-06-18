@@ -2,6 +2,7 @@ import json
 import queue
 import socket
 import threading
+from typing import Iterator
 
 
 def lan_ip() -> str:
@@ -58,3 +59,28 @@ class Broadcaster:
             self._last = (event, payload)
             for q in self._clients:
                 q.put((event, payload))
+
+
+class WebView:
+    """Sink con la misma interfaz pública que ui.ResultWindow, pero publica
+    al WebServer en vez de dibujar en tkinter."""
+
+    def __init__(self, server: "WebServer") -> None:
+        self._server = server
+
+    def show_status(self, msg: str) -> None:
+        self._server.publish("status", {"text": msg})
+
+    def show_error(self, msg: str) -> None:
+        self._server.publish("error", {"text": msg})
+
+    def show_and_collect(self, iterator: Iterator[str]) -> str:
+        full = "".join(iterator)
+        self._server.publish("response", {"markdown": full})
+        return full
+
+    def show(self, iterator: Iterator[str]) -> None:
+        self.show_and_collect(iterator)
+
+    def close(self) -> None:
+        pass

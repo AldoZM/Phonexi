@@ -1,7 +1,7 @@
 import socket
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from phonexi.webserver import lan_ip, find_free_port, format_sse, Broadcaster
+from phonexi.webserver import lan_ip, find_free_port, format_sse, Broadcaster, WebView
 
 
 def test_format_sse_shape():
@@ -55,3 +55,26 @@ def test_broadcaster_unregister_stops_delivery():
     b.unregister(q)
     b.publish("status", {"text": "y"})
     assert q.empty()
+
+
+def test_webview_show_status_publishes():
+    server = MagicMock()
+    WebView(server).show_status("Listening...")
+    server.publish.assert_called_once_with("status", {"text": "Listening..."})
+
+
+def test_webview_show_error_publishes():
+    server = MagicMock()
+    WebView(server).show_error("boom")
+    server.publish.assert_called_once_with("error", {"text": "boom"})
+
+
+def test_webview_show_and_collect_joins_and_returns():
+    server = MagicMock()
+    result = WebView(server).show_and_collect(iter(["hel", "lo"]))
+    assert result == "hello"
+    server.publish.assert_called_once_with("response", {"markdown": "hello"})
+
+
+def test_webview_close_is_noop():
+    WebView(MagicMock()).close()  # must not raise
