@@ -74,10 +74,10 @@ INDEX_HTML = """<!DOCTYPE html>
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
 <style>
   body { background:#0d0d0d; color:#e0e0e0; margin:0;
-         font-family:'Cascadia Code',Consolas,monospace; }
-  #status { color:#6272a4; padding:10px 16px; font-size:14px; }
+         font-family:'Cascadia Code',Consolas,monospace; font-size:18px; }
+  #status { color:#6272a4; padding:10px 16px; font-size:16px; }
   #status.err { color:#ff5555; }
-  #response { padding:0 16px 24px; line-height:1.5; }
+  #response { padding:0 16px 24px; line-height:1.55; font-size:18px; }
   #response strong { background:#f1fa8c; color:#282a36; padding:0 3px; }
   #response h1,#response h2,#response h3 { color:#8be9fd; }
   #response code { color:#50fa7b; background:#1c1c1c; padding:0 3px; }
