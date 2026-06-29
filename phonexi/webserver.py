@@ -122,6 +122,7 @@ INDEX_HTML = """<!DOCTYPE html>
     let t = JSON.parse(e.data).text.trimEnd();
     while (t.endsWith('.')) t = t.slice(0, -1);
     base = t;
+    dots = 1;
     animate = true;
   });
   es.addEventListener('error', e => {
@@ -134,6 +135,7 @@ INDEX_HTML = """<!DOCTYPE html>
     respEl.innerHTML = marked.parse(JSON.parse(e.data).markdown);
     respEl.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
     base = "Waiting for the next question";
+    dots = 1;
     animate = true;
   });
 </script>
