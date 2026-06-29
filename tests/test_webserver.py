@@ -133,3 +133,21 @@ def test_quiet_server_reports_real_errors():
         except ValueError:
             srv.handle_error(None, ("192.168.1.8", 50560))
     assert called.get("hit") is True
+
+
+def test_index_html_has_waiting_legends():
+    assert "Waiting for a question" in INDEX_HTML
+    assert "Waiting for the next question" in INDEX_HTML
+
+
+def test_index_html_has_dot_animation():
+    assert "setInterval(" in INDEX_HTML
+    assert 'repeat(' in INDEX_HTML
+
+
+def test_index_html_strips_trailing_dots_without_regex():
+    # Trailing dots from server statuses ("Listening...") must be stripped so the
+    # animated dots don't double up — done with trimEnd()+endsWith, no backslash regex.
+    assert "trimEnd()" in INDEX_HTML
+    assert "endsWith('.')" in INDEX_HTML
+    assert "[.\\s]" not in INDEX_HTML  # no backslash-escape regex (Python 3.14 SyntaxWarning)

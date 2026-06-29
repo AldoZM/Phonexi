@@ -101,24 +101,40 @@ INDEX_HTML = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-<div id="status">Waiting for Phonexi...</div>
+<div id="status">Waiting for a question</div>
 <div id="response"></div>
 <script>
   const statusEl = document.getElementById('status');
   const respEl = document.getElementById('response');
+
+  let base = "Waiting for a question";
+  let animate = true;
+  let dots = 1;
+  setInterval(() => {
+    if (!animate) return;
+    statusEl.textContent = base + ".".repeat(dots);
+    dots = dots % 3 + 1;
+  }, 500);
+
   const es = new EventSource('/events');
   es.addEventListener('status', e => {
     statusEl.className = '';
-    statusEl.textContent = JSON.parse(e.data).text;
+    let t = JSON.parse(e.data).text.trimEnd();
+    while (t.endsWith('.')) t = t.slice(0, -1);
+    base = t;
+    animate = true;
   });
   es.addEventListener('error', e => {
     if (!e.data) return;
+    animate = false;
     statusEl.className = 'err';
     statusEl.textContent = JSON.parse(e.data).text;
   });
   es.addEventListener('response', e => {
     respEl.innerHTML = marked.parse(JSON.parse(e.data).markdown);
     respEl.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
+    base = "Waiting for the next question";
+    animate = true;
   });
 </script>
 </body>
