@@ -21,6 +21,10 @@ Background Python daemon for Windows with two hotkeys:
   on the same WiFi. The page auto-updates via SSE as hotkeys fire. No tkinter in
   this mode → nothing appears on a shared screen. Use when screen-sharing or on a
   single monitor.
+  The status legend animates with cycling dots (1→2→3→1, ~500ms) so the page always
+  signals the server is alive: "Waiting for a question" on load, "Waiting for the next
+  question" after a response, and the live status (Listening/Analyzing/question) in
+  between. Animation runs client-side (JS in the page), stops on error.
 
 Primary use case: discreet coding/interview assistant — captures screen or listens to a call and provides instant AI responses on a secondary monitor or on your phone.
 
@@ -121,6 +125,13 @@ Phonexi/
 - _print_qr reconfigures stdout to UTF-8 (try/except) so the block glyphs (█) don't crash on a
   Windows cp1252 console.
 - Security: server binds 0.0.0.0 with no auth — intended for a trusted/personal WiFi only.
+- Animated status legend: client-side JS in INDEX_HTML. A setInterval (~500ms) appends
+  ".".repeat(dots) to a `base` string, cycling dots 1→2→3→1; SSE handlers only set
+  `base`/`animate` (no server-pushed frames). The status handler strips trailing
+  dots/whitespace via trimEnd()+endsWith('.') (no backslash regex — Python 3.14 warns on
+  invalid escapes in INDEX_HTML). Error sets animate=false. dots resets to 1 on resume.
+  Two waiting legends frame the lifecycle: "Waiting for a question" / "Waiting for the
+  next question". English only; listener.py status strings untouched.
 
 ### Interview-style prompt
 - Responds in the same language as the question (auto-detected)
