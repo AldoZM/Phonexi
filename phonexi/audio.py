@@ -3,9 +3,9 @@ import io
 import threading
 import wave
 
-import pyaudiowpatch as pyaudio
 from groq import Groq
 
+from phonexi.backends import get_audio_backend
 from phonexi.config import GROQ_API_KEY
 
 _CHUNK = 512
@@ -31,22 +31,31 @@ def _to_mono_16k(raw: bytes, channels: int, samplerate: int) -> tuple[bytes, int
     return decimated.tobytes(), actual_rate
 
 
-def _get_loopback_device(p: pyaudio.PyAudio) -> dict:
-    wasapi = p.get_host_api_info_by_type(pyaudio.paWASAPI)
-    default_speakers = p.get_device_info_by_index(wasapi["defaultOutputDevice"])
-
-    if default_speakers.get("isLoopbackDevice"):
-        return default_speakers
-
-    for loopback in p.get_loopback_device_info_generator():
-        if default_speakers["name"] in loopback["name"]:
-            return loopback
-
-    raise RuntimeError("No WASAPI loopback device found for default output")
+def _pcm_to_wav(pcm: bytes, rate: int) -> bytes:
+    """Wrap mono 16-bit PCM in a WAV container."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(rate)
+        wf.writeframes(pcm)
+    return buf.getvalue()
 
 
-def record(stop_event: threading.Event) -> bytes:
-    """Capture system audio (loopback) until stop_event is set. Returns WAV bytes."""
+def _record_windows(stop_event: threading.Event) -> bytes:
+    """Capture system audio via WASAPI loopback until stop_event is set. WAV bytes."""
+    import pyaudiowpatch as pyaudio
+
+    def _get_loopback_device(p: "pyaudio.PyAudio") -> dict:
+        wasapi = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+        default_speakers = p.get_device_info_by_index(wasapi["defaultOutputDevice"])
+        if default_speakers.get("isLoopbackDevice"):
+            return default_speakers
+        for loopback in p.get_loopback_device_info_generator():
+            if default_speakers["name"] in loopback["name"]:
+                return loopback
+        raise RuntimeError("No WASAPI loopback device found for default output")
+
     with pyaudio.PyAudio() as p:
         device = _get_loopback_device(p)
         channels = device["maxInputChannels"]
@@ -70,14 +79,12 @@ def record(stop_event: threading.Event) -> bytes:
         stream.close()
 
     pcm, out_rate = _to_mono_16k(b"".join(frames), channels, samplerate)
+    return _pcm_to_wav(pcm, out_rate)
 
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(out_rate)
-        wf.writeframes(pcm)
-    return buf.getvalue()
+
+def record(stop_event: threading.Event) -> bytes:
+    """Capture system audio until stop_event is set. Delegates to the platform backend."""
+    return get_audio_backend().record(stop_event)
 
 
 def transcribe(wav_bytes: bytes) -> str:

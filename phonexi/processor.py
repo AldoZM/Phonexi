@@ -1,4 +1,4 @@
-import base64
+import subprocess
 from pathlib import Path
 from typing import Iterator
 
@@ -7,7 +7,6 @@ from groq import Groq
 from phonexi.config import (
     GROQ_API_KEY,
     GROQ_MODEL_TEXT,
-    GROQ_MODEL_VISION,
     PROMPT,
 )
 
@@ -52,32 +51,33 @@ def process_text(question: str, context: "Context | None" = None) -> Iterator[st
             yield token
 
 
+def _ocr_image(path: Path) -> str:
+    """Extract text from a screenshot with the tesseract CLI."""
+    try:
+        result = subprocess.run(
+            ["tesseract", str(path), "stdout"],
+            capture_output=True, text=True, check=True,
+        )
+    except FileNotFoundError:
+        raise GroqAPIError(
+            "tesseract not found — install it (sudo apt install tesseract-ocr)"
+        )
+    except subprocess.CalledProcessError as exc:
+        raise GroqAPIError(f"OCR failed: {exc.stderr.strip()}")
+    return result.stdout
+
+
 def process(path: Path) -> Iterator[str]:
+    """Screenshot mode: OCR the image, then answer via the text model.
+
+    Groq no longer offers a vision model on the free tier, so screenshots are
+    read with tesseract and the extracted text is sent to the text LLM.
+    """
     if not GROQ_API_KEY:
         raise GroqNotConfiguredError("GROQ_API_KEY not set")
 
-    image_b64 = base64.b64encode(path.read_bytes()).decode("utf-8")
-    client = Groq(api_key=GROQ_API_KEY)
+    text = _ocr_image(path).strip()
+    if not text:
+        raise GroqAPIError("No text found in screenshot (OCR returned empty)")
 
-    stream = client.chat.completions.create(
-        model=GROQ_MODEL_VISION,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{image_b64}"},
-                    },
-                    {"type": "text", "text": PROMPT},
-                ],
-            }
-        ],
-        stream=True,
-        max_tokens=1024,
-    )
-
-    for chunk in stream:
-        token = chunk.choices[0].delta.content
-        if token:
-            yield token
+    yield from process_text(text)

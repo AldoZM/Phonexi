@@ -1,0 +1,14 @@
+# Linux-only dependencies. Install with:
+#   pip install -r requirements-linux.txt
+#
+# Also required (system packages, not pip):
+#   - Python dev headers for building evdev:   sudo apt install python3-dev
+#   - GStreamer + PipeWire plugin (screenshot): sudo apt install \
+#       gir1.2-gst-plugins-base-1.0 gstreamer1.0-pipewire
+#   - tesseract OCR (screenshot mode reads text from the image): \
+#       sudo apt install tesseract-ocr    (add e.g. tesseract-ocr-spa for Spanish)
+#   - Add your user to the 'input' group (evdev): sudo usermod -aG input "$USER"
+#     (log out and back in for it to take effect)
+-r requirements.txt
+evdev>=1.6        # global hotkey detection via /dev/input
+PyGObject>=3.46   # GStreamer bindings for ScreenCast-portal screenshot capture

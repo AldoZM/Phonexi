@@ -5,12 +5,11 @@ load_dotenv()
 
 GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
 
-# Vision model: only Groq free-tier model that accepts images (screenshot mode).
-GROQ_MODEL_VISION = "meta-llama/llama-4-scout-17b-16e-instruct"
-# Text model: larger, more human/precise wording (text + audio mode).
+# Text model — used by all modes. Screenshot mode OCRs the image (tesseract) and
+# sends the extracted text here; Groq no longer offers a free-tier vision model.
 GROQ_MODEL_TEXT = "llama-3.3-70b-versatile"
-# Backward-compatible alias (vision model) — used by process() and tests.
-GROQ_MODEL = GROQ_MODEL_VISION
+# Backward-compatible alias.
+GROQ_MODEL = GROQ_MODEL_TEXT
 
 PROMPT = (
     "You are an expert software engineer. Solve the technical/coding problem shown in the "

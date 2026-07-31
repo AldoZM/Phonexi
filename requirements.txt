@@ -1,8 +1,8 @@
-mss>=9.0.1
-pynput>=1.7.7
+# Shared dependencies (both Windows and Linux).
+# Platform-specific deps are in requirements-windows.txt / requirements-linux.txt.
 groq>=0.9
 pygments>=2.17
 python-dotenv>=1.0
-pyaudiowpatch>=0.2.12
-pytest>=8.0
 qrcode>=7.4
+pytest>=8.0
+mss>=9.0.1          # screen capture (Windows screenshot) + multi-monitor popup placement

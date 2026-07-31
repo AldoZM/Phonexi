@@ -32,6 +32,9 @@ screenshots/*
 # Local backups
 *_backup.txt
 
+# graphify knowledge-graph output (generated)
+graphify-out/
+
 # OS
 .DS_Store
 Thumbs.db

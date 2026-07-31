@@ -18,18 +18,18 @@ def test_hotkey_listener_accepts_tk_root(root):
 
 
 def test_start_capture_calls_capture_and_creates_window(root):
-    listener = HotkeyListener(tk_root=root)
-    fake_path = MagicMock()
+    fake_backend = MagicMock()
+    fake_backend.capture.return_value = MagicMock()
+    listener = HotkeyListener(tk_root=root, screenshot_backend=fake_backend)
 
-    with patch("phonexi.listener.capture", return_value=fake_path) as mock_capture, \
-         patch("phonexi.listener.ResultWindow") as mock_window_cls, \
+    with patch("phonexi.listener.ResultWindow") as mock_window_cls, \
          patch("phonexi.listener.threading.Thread"), \
          patch.object(listener, "_stream_image"):
 
         mock_window_cls.return_value = MagicMock()
         listener._start_capture()
 
-        mock_capture.assert_called_once()
+        fake_backend.capture.assert_called_once()
         mock_window_cls.assert_called_once_with(root, use_primary=False)
 
 
@@ -72,10 +72,10 @@ def test_stream_image_handles_generic_error(root):
 
 
 def test_start_capture_forwards_use_primary(root):
-    listener = HotkeyListener(tk_root=root, use_primary=True)
+    fake_backend = MagicMock()
+    listener = HotkeyListener(tk_root=root, use_primary=True, screenshot_backend=fake_backend)
 
-    with patch("phonexi.listener.capture", return_value=MagicMock()), \
-         patch("phonexi.listener.ResultWindow") as mock_window_cls, \
+    with patch("phonexi.listener.ResultWindow") as mock_window_cls, \
          patch("phonexi.listener.threading.Thread"), \
          patch.object(listener, "_stream_image"):
 
@@ -97,12 +97,30 @@ def test_open_recording_popup_forwards_use_primary(root):
 
 def test_view_factory_used_for_views():
     fake_view = MagicMock()
-    listener = HotkeyListener(tk_root=None, view_factory=lambda: fake_view)
-    with patch("phonexi.listener.capture", return_value=MagicMock()), \
-         patch("phonexi.listener.threading.Thread"), \
+    listener = HotkeyListener(
+        tk_root=None, view_factory=lambda: fake_view, screenshot_backend=MagicMock()
+    )
+    with patch("phonexi.listener.threading.Thread"), \
          patch.object(listener, "_stream_image"):
         listener._start_capture()
     assert listener._current_window is fake_view
+
+
+def test_start_runs_screenshot_lifecycle_around_input():
+    fake_input = MagicMock()
+    fake_screenshot = MagicMock()
+    calls = []
+    fake_screenshot.start.side_effect = lambda: calls.append("start")
+    fake_input.run.side_effect = lambda *a: calls.append("run")
+    fake_screenshot.stop.side_effect = lambda: calls.append("stop")
+
+    listener = HotkeyListener(
+        tk_root=None, view_factory=lambda: MagicMock(),
+        input_backend=fake_input, screenshot_backend=fake_screenshot,
+    )
+    listener.start()
+
+    assert calls == ["start", "run", "stop"]
 
 
 def test_schedule_runs_inline_without_tk():
@@ -110,3 +128,32 @@ def test_schedule_runs_inline_without_tk():
     called = []
     listener._schedule(lambda x: called.append(x), 7)
     assert called == [7]
+
+
+def test_start_delegates_to_input_backend():
+    fake_backend = MagicMock()
+    listener = HotkeyListener(
+        tk_root=None, view_factory=lambda: MagicMock(),
+        input_backend=fake_backend, screenshot_backend=MagicMock(),
+    )
+
+    listener.start()
+
+    fake_backend.run.assert_called_once_with(
+        listener._on_screenshot_hotkey,
+        listener._on_audio_toggle,
+        listener._on_close,
+    )
+
+
+def test_audio_toggle_starts_then_stops():
+    listener = HotkeyListener(tk_root=None, view_factory=lambda: MagicMock())
+
+    with patch.object(listener, "_on_audio_start") as start, \
+         patch.object(listener, "_on_audio_stop") as stop:
+        listener._on_audio_toggle()  # not recording -> start
+        listener._recording = True
+        listener._on_audio_toggle()  # recording -> stop
+
+    start.assert_called_once()
+    stop.assert_called_once()

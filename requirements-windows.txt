@@ -1,0 +1,5 @@
+# Windows-only dependencies. Install with:
+#   pip install -r requirements-windows.txt
+-r requirements.txt
+pynput>=1.7.7          # global hotkey detection
+pyaudiowpatch>=0.2.12  # WASAPI loopback system-audio capture
