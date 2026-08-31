@@ -172,3 +172,25 @@ def test_prompt_forbids_inventing_facts():
 def test_prompt_asks_for_wire_level_answers():
     from phonexi.config import PROMPT
     assert "wire-format level" in PROMPT.lower()
+
+
+def test_prompt_forbids_invented_metrics():
+    """gpt-oss-120b invented a 90% reduction and 10k TPS that no context stated."""
+    from phonexi.config import PROMPT
+    low = PROMPT.lower()
+    assert "percentages" in low
+    assert "throughput figures" in low
+
+
+def test_prompt_forbids_markdown_tables():
+    """The popup renders a markdown table as a wall of pipes."""
+    from phonexi.config import PROMPT
+    assert "no markdown tables" in PROMPT.lower()
+
+
+def test_prompt_forbids_vague_magnitudes():
+    """"Varios miles por segundo" slipped past the percentages rule."""
+    from phonexi.config import PROMPT
+    low = PROMPT.lower()
+    assert "orders of magnitude" in low
+    assert "vague quantities" in low
