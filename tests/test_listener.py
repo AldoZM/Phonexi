@@ -42,7 +42,7 @@ def test_stream_image_calls_process_and_show(root):
     with patch("phonexi.listener.process", return_value=fake_tokens) as mock_process:
         listener._stream_image(fake_path, mock_win)
 
-    mock_process.assert_called_once_with(fake_path)
+    mock_process.assert_called_once_with(fake_path, briefing=None)
     mock_win.show_and_collect.assert_called_once_with(fake_tokens)
 
 
@@ -110,3 +110,35 @@ def test_schedule_runs_inline_without_tk():
     called = []
     listener._schedule(lambda x: called.append(x), 7)
     assert called == [7]
+
+
+def test_listener_defaults_to_no_briefing(root):
+    listener = HotkeyListener(tk_root=root)
+    assert listener._briefing is None
+
+
+def test_listener_stores_briefing(root):
+    listener = HotkeyListener(tk_root=root, briefing="Vacante Kafka.")
+    assert listener._briefing == "Vacante Kafka."
+
+
+def test_stream_image_forwards_briefing_to_process(root):
+    listener = HotkeyListener(tk_root=root, briefing="Vacante Kafka.")
+
+    with patch("phonexi.listener.process", return_value=iter([])) as mock_process:
+        listener._stream_image(MagicMock(), MagicMock())
+
+    assert mock_process.call_args.kwargs["briefing"] == "Vacante Kafka."
+
+
+def test_record_worker_forwards_briefing_to_process_text(root):
+    listener = HotkeyListener(tk_root=root, briefing="Vacante Kafka.")
+    win = MagicMock()
+    listener._current_window = win
+
+    with patch("phonexi.listener.record", return_value=b"wav"), \
+         patch("phonexi.listener.transcribe", return_value="¿Qué es un broker?"), \
+         patch("phonexi.listener.process_text", return_value=iter([])) as mock_text:
+        listener._record_worker(MagicMock())
+
+    assert mock_text.call_args.kwargs["briefing"] == "Vacante Kafka."

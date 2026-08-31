@@ -16,6 +16,7 @@ Discreet background daemon for Windows that captures screenshots or listens to s
 - **Screenshot mode** — captures only the monitor where your cursor is
 - **Audio mode** — captures system audio via WASAPI loopback (hears the interviewer on a call, not your mic)
 - **Web mode (`-w`)** — serves answers to your phone over the LAN (scan a terminal QR), auto-updating via SSE; nothing shows on a shared screen
+- **Prior context (`-c`)** — point it at a `.md` or `.txt` file (the job posting, the stack, your own experience) and the model answers oriented to it instead of cold
 - **Interview-style responses** — direct, confident, no filler
 - **Responds in the question's language** — Spanish question → Spanish answer
 - Groq API free tier — 14,400 requests/day, no credit card required
@@ -67,6 +68,23 @@ screen-sharing or on a single monitor):
 python main.py -w
 ```
 
+Load a **prior-context** file so answers come out oriented:
+
+```bash
+python main.py -c contexto.md
+```
+
+The file is read and validated **before** the hotkeys are registered, so the context
+is already loaded when you press the first one. Only `.md` and `.txt` are accepted,
+up to 20,000 characters. If the path does not exist, has another extension, is not
+UTF-8 text, is empty, or is too large, Phonexi prints the reason and exits without
+starting — you find out on launch, not mid-interview. The flag is optional and
+combines with `-P` and `-w`.
+
+Put in it whatever orients the answer: the job posting, the stack, the seniority, the
+language of the interview, your own background. It reaches the model as background
+information, never as the question to answer.
+
 Phonexi prints a QR code and the LAN URL in the terminal. Scan the QR with your
 phone (same WiFi) — responses appear in the browser, auto-updating via SSE.
 No popup is shown on the shared screen. The hotkeys are unchanged.
@@ -79,6 +97,7 @@ trusted network, not on corporate or monitored WiFi.
 Phonexi/
 ├── main.py               # Entry point
 ├── phonexi/
+│   ├── briefing.py       # Optional -c prior-context file: load + validate
 │   ├── config.py         # Env config (API key, model, prompt)
 │   ├── screenshot.py     # Per-monitor screenshot capture
 │   ├── processor.py      # Groq vision + text LLM streaming
@@ -86,7 +105,7 @@ Phonexi/
 │   ├── listener.py       # Hotkey detection + orchestration (view-agnostic via view_factory)
 │   ├── ui.py             # Dark draggable popup with syntax highlighting
 │   └── webserver.py      # Web mode: local HTTP + SSE, QR, phone-readable page
-├── tests/                # pytest suite (47 tests)
+├── tests/                # pytest suite (85 tests)
 ├── requirements.txt
 ├── .env                  # NOT committed — add your key here
 └── context.txt           # Full project context for AI assistants

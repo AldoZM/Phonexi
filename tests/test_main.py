@@ -1,8 +1,11 @@
 import io
 import sys
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 import main
+from phonexi.briefing import BriefingError
 
 
 def test_parse_args_short_flag():
@@ -57,3 +60,78 @@ def test_print_qr_survives_cp1252_console(monkeypatch):
     monkeypatch.setattr(sys, "stdout", fake_stdout)
     # Must not raise UnicodeEncodeError.
     main._print_qr("http://192.168.1.42:8000")
+
+
+def test_parse_args_context_short_flag():
+    with patch.object(sys, "argv", ["main.py", "-c", "brief.md"]):
+        assert main._parse_args().context == "brief.md"
+
+
+def test_parse_args_context_long_flag():
+    with patch.object(sys, "argv", ["main.py", "--context", "brief.md"]):
+        assert main._parse_args().context == "brief.md"
+
+
+def test_parse_args_context_defaults_to_none():
+    with patch.object(sys, "argv", ["main.py"]):
+        assert main._parse_args().context is None
+
+
+def test_main_without_context_flag_never_reads_a_file():
+    with patch.object(sys, "argv", ["main.py"]), \
+         patch("main.load_briefing") as mock_load, \
+         patch("main.HotkeyListener"), \
+         patch("main.tk.Tk"):
+        main.main()
+    mock_load.assert_not_called()
+
+
+def test_main_loads_briefing_before_starting_the_listener():
+    calls = []
+    with patch.object(sys, "argv", ["main.py", "-c", "brief.md"]), \
+         patch("main.load_briefing", side_effect=lambda p: calls.append("load") or "CTX"), \
+         patch("main.HotkeyListener", side_effect=lambda **kw: calls.append("listener") or MagicMock()), \
+         patch("main.tk.Tk"):
+        main.main()
+    assert calls == ["load", "listener"]
+
+
+def test_main_passes_briefing_to_the_listener():
+    with patch.object(sys, "argv", ["main.py", "-c", "brief.md"]), \
+         patch("main.load_briefing", return_value="Vacante Kafka."), \
+         patch("main.HotkeyListener") as mock_listener_cls, \
+         patch("main.tk.Tk"):
+        main.main()
+    assert mock_listener_cls.call_args.kwargs["briefing"] == "Vacante Kafka."
+
+
+def test_web_mode_passes_briefing_to_the_listener():
+    with patch.object(sys, "argv", ["main.py", "-w", "-c", "brief.md"]), \
+         patch("main._print_qr"), \
+         patch("main.load_briefing", return_value="Vacante Kafka."), \
+         patch("phonexi.webserver.WebServer") as mock_server_cls, \
+         patch("phonexi.webserver.lan_ip", return_value="192.168.1.42"), \
+         patch("main.HotkeyListener") as mock_listener_cls:
+        mock_server_cls.return_value.port = 8000
+        main.main()
+    assert mock_listener_cls.call_args.kwargs["briefing"] == "Vacante Kafka."
+
+
+def test_main_exits_when_briefing_is_invalid():
+    with patch.object(sys, "argv", ["main.py", "-c", "no_existe.md"]), \
+         patch("main.load_briefing", side_effect=BriefingError("no_existe.md: file not found")), \
+         patch("main.HotkeyListener") as mock_listener_cls, \
+         patch("main.tk.Tk"):
+        with pytest.raises(SystemExit) as exc:
+            main.main()
+    assert exc.value.code == 1
+    mock_listener_cls.assert_not_called()
+
+
+def test_main_prints_the_reason_when_briefing_is_invalid(capsys):
+    with patch.object(sys, "argv", ["main.py", "-c", "no_existe.md"]), \
+         patch("main.load_briefing", side_effect=BriefingError("no_existe.md: file not found")), \
+         patch("main.tk.Tk"):
+        with pytest.raises(SystemExit):
+            main.main()
+    assert "no_existe.md: file not found" in capsys.readouterr().out

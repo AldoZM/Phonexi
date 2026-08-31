@@ -12,9 +12,16 @@ class HotkeyListener:
     _SCREENSHOT_MOD = keyboard.Key.shift_r   # Right Shift + P → screenshot
     _AUDIO_MOD      = keyboard.Key.alt_gr    # Right Alt   + P → toggle recording
 
-    def __init__(self, tk_root=None, use_primary: bool = False, view_factory=None) -> None:
+    def __init__(
+        self,
+        tk_root=None,
+        use_primary: bool = False,
+        view_factory=None,
+        briefing: "str | None" = None,
+    ) -> None:
         self._tk_root = tk_root
         self._use_primary = use_primary
+        self._briefing = briefing
         self._view_factory = view_factory or (
             lambda: ResultWindow(self._tk_root, use_primary=self._use_primary)
         )
@@ -90,7 +97,7 @@ class HotkeyListener:
 
     def _stream_image(self, path, win) -> None:
         try:
-            response = win.show_and_collect(process(path))
+            response = win.show_and_collect(process(path, briefing=self._briefing))
             if response:
                 self._context = Context(
                     user_turn="[Screenshot of interview question]",
@@ -156,7 +163,9 @@ class HotkeyListener:
         if win is self._current_window:
             self._schedule(win.show_status, f"❓ {text}\n")
         try:
-            response = win.show_and_collect(process_text(text, context=self._context))
+            response = win.show_and_collect(
+                process_text(text, context=self._context, briefing=self._briefing)
+            )
             if response:
                 self._context = Context(user_turn=text, assistant_turn=response)
         except GroqNotConfiguredError:

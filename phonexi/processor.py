@@ -20,6 +20,18 @@ class GroqAPIError(Exception):
     pass
 
 
+BRIEFING_HEADER = (
+    "Background context provided by the candidate. Use it to orient your answer "
+    "(stack, role, experience). It is NOT the question — never answer it directly:\n"
+)
+
+
+def _briefing_message(briefing: "str | None") -> "dict | None":
+    if not briefing or not briefing.strip():
+        return None
+    return {"role": "system", "content": BRIEFING_HEADER + briefing.strip()}
+
+
 class Context:
     """Last exchange kept so follow-up questions have conversation history."""
     def __init__(self, user_turn: str, assistant_turn: str) -> None:
@@ -27,12 +39,20 @@ class Context:
         self.assistant_turn = assistant_turn
 
 
-def process_text(question: str, context: "Context | None" = None) -> Iterator[str]:
+def process_text(
+    question: str,
+    context: "Context | None" = None,
+    briefing: "str | None" = None,
+) -> Iterator[str]:
     if not GROQ_API_KEY:
         raise GroqNotConfiguredError("GROQ_API_KEY not set")
 
     client = Groq(api_key=GROQ_API_KEY)
     messages: list[dict] = [{"role": "system", "content": PROMPT}]
+
+    brief_msg = _briefing_message(briefing)
+    if brief_msg is not None:
+        messages.append(brief_msg)
 
     if context is not None:
         messages.append({"role": "user",      "content": context.user_turn})
@@ -52,27 +72,35 @@ def process_text(question: str, context: "Context | None" = None) -> Iterator[st
             yield token
 
 
-def process(path: Path) -> Iterator[str]:
+def process(path: Path, briefing: "str | None" = None) -> Iterator[str]:
     if not GROQ_API_KEY:
         raise GroqNotConfiguredError("GROQ_API_KEY not set")
 
     image_b64 = base64.b64encode(path.read_bytes()).decode("utf-8")
     client = Groq(api_key=GROQ_API_KEY)
 
+    messages: list[dict] = []
+
+    brief_msg = _briefing_message(briefing)
+    if brief_msg is not None:
+        messages.append(brief_msg)
+
+    messages.append(
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image_b64}"},
+                },
+                {"type": "text", "text": PROMPT},
+            ],
+        }
+    )
+
     stream = client.chat.completions.create(
         model=GROQ_MODEL_VISION,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{image_b64}"},
-                    },
-                    {"type": "text", "text": PROMPT},
-                ],
-            }
-        ],
+        messages=messages,
         stream=True,
         max_tokens=1024,
     )
