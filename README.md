@@ -81,6 +81,9 @@ UTF-8 text, is empty, or is too large, Phonexi prints the reason and exits witho
 starting — you find out on launch, not mid-interview. The flag is optional and
 combines with `-P` and `-w`.
 
+Keep those files in `contexts/` — see [`contexts/README.md`](contexts/README.md)
+for what to put in one and why the files themselves are never committed.
+
 Put in it whatever orients the answer: the job posting, the stack, the seniority, the
 language of the interview, your own background. It reaches the model as background
 information, never as the question to answer.
@@ -96,6 +99,7 @@ trusted network, not on corporate or monitored WiFi.
 ```
 Phonexi/
 ├── main.py               # Entry point
+├── contexts/             # Your -c context files (git-ignored; see its README)
 ├── phonexi/
 │   ├── briefing.py       # Optional -c prior-context file: load + validate
 │   ├── config.py         # Env config (API key, model, prompt)

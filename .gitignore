@@ -35,3 +35,8 @@ screenshots/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Prior-context files for -c: the folder and its docs are tracked,
+# the context files themselves are personal and never published
+contexts/*
+!contexts/README.md
