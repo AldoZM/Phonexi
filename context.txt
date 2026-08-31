@@ -5,7 +5,7 @@ Background Python daemon for Windows with two hotkeys:
 
 **Right Shift + P — Screenshot mode:**
 1. Captures screenshot of the monitor where the cursor is
-2. Sends screenshot to Groq vision LLM (llama-4-scout-17b)
+2. Sends screenshot to Groq vision LLM (qwen/qwen3.8-27b)
 3. Streams response into a dark terminal-style Tkinter popup (secondary monitor by default, or primary with -P flag)
 
 **Right Alt + P — Audio mode (toggle):**

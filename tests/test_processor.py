@@ -54,5 +54,5 @@ def test_process_calls_correct_model(tmp_path):
         list(process(img))
 
     call_kwargs = mock_client.chat.completions.create.call_args.kwargs
-    assert "llama-4-scout" in call_kwargs["model"]
+    assert "qwen" in call_kwargs["model"]
     assert call_kwargs["stream"] is True
