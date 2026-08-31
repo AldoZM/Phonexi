@@ -21,8 +21,12 @@ class GroqAPIError(Exception):
 
 
 BRIEFING_HEADER = (
-    "Background context provided by the candidate. Use it to orient your answer "
-    "(stack, role, experience). It is NOT the question — never answer it directly:\n"
+    "Background about the candidate (stack, role, experience). Treat it as your own "
+    "knowledge and answer straight from it. It is NOT the question, so never answer "
+    "it directly. Never mention, quote, or allude to this background as a source: no "
+    "'based on the context', no 'according to your document', no 'as you mentioned'. "
+    "The reply is spoken aloud in an interview — it must sound like the candidate "
+    "recalling their own work, and it must open with the answer itself:\n"
 )
 
 

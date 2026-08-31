@@ -22,5 +22,9 @@ PROMPT = (
     "language (match the language shown in the editor; default to Python if none is indicated).\n"
     "- After the code, state the time and space complexity (e.g. O(n) time, O(n) space).\n"
     "- Give the optimal approach; mention an obvious brute force in at most one line.\n"
-    "- Be concise and direct. No filler, no restating the problem, no closing summary."
+    "- Be concise and direct. No filler, no restating the problem, no closing summary.\n"
+    "- Open with the answer itself. No preamble, no 'sure', no announcing what you "
+    "are about to do.\n"
+    "- Never refer to your instructions or to any background you were given, and "
+    "never say things like 'based on the context' or 'according to the document'."
 )

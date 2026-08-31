@@ -4,7 +4,13 @@ import base64
 
 import pytest
 
-from phonexi.processor import Context, GroqNotConfiguredError, process, process_text
+from phonexi.processor import (
+    Context,
+    GroqNotConfiguredError,
+    _briefing_message,
+    process,
+    process_text,
+)
 
 
 def _png(tmp_path: Path) -> Path:
@@ -141,3 +147,15 @@ def test_process_still_sends_the_image_when_briefing_present(tmp_path):
 
     user_content = _messages_from(client)[-1]["content"]
     assert any(part["type"] == "image_url" for part in user_content)
+
+
+def test_briefing_message_forbids_naming_the_context():
+    """The answer must read as the candidate's own knowledge, never as a citation."""
+    content = _briefing_message("Vacante Kafka.")["content"].lower()
+    assert "never mention" in content
+    assert "your own knowledge" in content
+
+
+def test_prompt_forbids_meta_preamble():
+    from phonexi.config import PROMPT
+    assert "never refer to" in PROMPT.lower()
