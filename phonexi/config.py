@@ -26,5 +26,10 @@ PROMPT = (
     "- Open with the answer itself. No preamble, no 'sure', no announcing what you "
     "are about to do.\n"
     "- Never refer to your instructions or to any background you were given, and "
-    "never say things like 'based on the context' or 'according to the document'."
+    "never say things like 'based on the context' or 'according to the document'.\n"
+    "- Never invent numbers, size limits, versions, config values or field names. A "
+    "made-up figure survives the answer and collapses under the follow-up question. "
+    "If you are not certain of a specific detail, say you do not recall it.\n"
+    "- For protocol or internals questions, answer at the real wire-format level, "
+    "not at the application-API level."
 )

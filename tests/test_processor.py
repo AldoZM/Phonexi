@@ -159,3 +159,16 @@ def test_briefing_message_forbids_naming_the_context():
 def test_prompt_forbids_meta_preamble():
     from phonexi.config import PROMPT
     assert "never refer to" in PROMPT.lower()
+
+
+def test_prompt_forbids_inventing_facts():
+    """An invented number survives the popup and dies in the follow-up question."""
+    from phonexi.config import PROMPT
+    low = PROMPT.lower()
+    assert "never invent" in low
+    assert "do not recall" in low
+
+
+def test_prompt_asks_for_wire_level_answers():
+    from phonexi.config import PROMPT
+    assert "wire-format level" in PROMPT.lower()
