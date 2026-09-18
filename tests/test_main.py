@@ -8,6 +8,18 @@ import main
 from phonexi.briefing import BriefingError
 
 
+@pytest.fixture(autouse=True)
+def never_prune_for_real():
+    """Keep the suite off the real screenshots folder.
+
+    Startup pruning deletes files, and most tests here call main() for other
+    reasons — without this every test run would wipe the developer's captures.
+    Tests that assert on pruning patch it again themselves.
+    """
+    with patch("main.prune"):
+        yield
+
+
 def test_parse_args_short_flag():
     with patch.object(sys, "argv", ["main.py", "-P"]):
         assert main._parse_args().primary is True
@@ -135,3 +147,48 @@ def test_main_prints_the_reason_when_briefing_is_invalid(capsys):
         with pytest.raises(SystemExit):
             main.main()
     assert "no_existe.md: file not found" in capsys.readouterr().out
+
+
+def test_parse_args_region_defaults_to_none():
+    with patch.object(sys, "argv", ["main.py"]):
+        assert main._parse_args().region is None
+
+
+def test_parse_args_bare_region_flag_uses_the_default_size():
+    from phonexi.screenshot import DEFAULT_REGION
+
+    with patch.object(sys, "argv", ["main.py", "-r"]):
+        assert main._parse_args().region == DEFAULT_REGION
+
+
+def test_parse_args_region_accepts_an_explicit_size():
+    with patch.object(sys, "argv", ["main.py", "--region", "960x540"]):
+        assert main._parse_args().region == (960, 540)
+
+
+def test_parse_args_region_rejects_junk():
+    with patch.object(sys, "argv", ["main.py", "-r", "huge"]):
+        with pytest.raises(SystemExit):
+            main._parse_args()
+
+
+def test_main_forwards_the_region_to_the_listener():
+    with patch.object(sys, "argv", ["main.py", "-r", "960x540"]), \
+         patch("main.tk.Tk"), \
+         patch("main.threading.Thread"), \
+         patch("main.prune"), \
+         patch("main.HotkeyListener") as mock_listener_cls:
+        main.main()
+
+    assert mock_listener_cls.call_args.kwargs["region"] == (960, 540)
+
+
+def test_main_prunes_old_captures_at_startup():
+    with patch.object(sys, "argv", ["main.py"]), \
+         patch("main.tk.Tk"), \
+         patch("main.threading.Thread"), \
+         patch("main.HotkeyListener"), \
+         patch("main.prune") as mock_prune:
+        main.main()
+
+    mock_prune.assert_called_once()

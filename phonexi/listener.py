@@ -18,10 +18,12 @@ class HotkeyListener:
         use_primary: bool = False,
         view_factory=None,
         briefing: "str | None" = None,
+        region: "tuple | None" = None,
     ) -> None:
         self._tk_root = tk_root
         self._use_primary = use_primary
         self._briefing = briefing
+        self._region = region
         self._view_factory = view_factory or (
             lambda: ResultWindow(self._tk_root, use_primary=self._use_primary)
         )
@@ -90,7 +92,7 @@ class HotkeyListener:
 
     def _start_capture(self) -> None:
         self._close_current()
-        path = capture()
+        path = capture(region=self._region)
         win = self._view_factory()
         self._current_window = win
         threading.Thread(target=self._stream_image, args=(path, win), daemon=True).start()

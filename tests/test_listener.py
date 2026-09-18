@@ -142,3 +142,27 @@ def test_record_worker_forwards_briefing_to_process_text(root):
         listener._record_worker(MagicMock())
 
     assert mock_text.call_args.kwargs["briefing"] == "Vacante Kafka."
+
+
+def test_start_capture_passes_no_region_by_default(root):
+    listener = HotkeyListener(tk_root=root)
+
+    with patch("phonexi.listener.capture", return_value=MagicMock()) as mock_capture, \
+         patch("phonexi.listener.ResultWindow"), \
+         patch("phonexi.listener.threading.Thread"), \
+         patch.object(listener, "_stream_image"):
+        listener._start_capture()
+
+    mock_capture.assert_called_once_with(region=None)
+
+
+def test_start_capture_forwards_the_region(root):
+    listener = HotkeyListener(tk_root=root, region=(1280, 720))
+
+    with patch("phonexi.listener.capture", return_value=MagicMock()) as mock_capture, \
+         patch("phonexi.listener.ResultWindow"), \
+         patch("phonexi.listener.threading.Thread"), \
+         patch.object(listener, "_stream_image"):
+        listener._start_capture()
+
+    mock_capture.assert_called_once_with(region=(1280, 720))

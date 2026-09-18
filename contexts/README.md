@@ -33,6 +33,27 @@ The flag is optional and combines with `-P` and `-w`. The file is read and
 validated **before** the hotkey listener starts, so the context is already in
 place when you press the first hotkey.
 
+## Format: number your sections
+
+Only the sections that answer the question are sent to the model, so the file has
+to be splittable. A section header is a line of `=` characters, a title that
+starts with a number and a dot, and another line of `=`:
+
+```
+============================================================
+4. CONSUMER LAG Y OBSERVABILIDAD
+============================================================
+```
+
+Everything above the first numbered header — the banner and the "how to use this
+sheet" rules — travels with every request, so keep that part short and put the
+rules there. A file with no numbered headers still works: it is sent whole, which
+costs about 4,200 tokens per question instead of 1,000-1,800.
+
+Write each section so it stands on its own. The selector matches the words of the
+question against the title and the body, and a section that only makes sense
+after reading the previous one will arrive without it.
+
 ## Rules the loader enforces
 
 `.md` or `.txt` only, up to 20,000 characters, valid UTF-8, not empty. A file

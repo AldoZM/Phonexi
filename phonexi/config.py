@@ -12,6 +12,28 @@ GROQ_MODEL_TEXT: str = os.getenv("GROQ_MODEL_TEXT", "qwen/qwen3.8-27b")
 # Backward-compatible alias (vision model) — used by process() and tests.
 GROQ_MODEL = GROQ_MODEL_VISION
 
+# Cap on the answer length, and it must stay UNDER the output-tokens-per-minute
+# allowance, which is 1000 on the free tier for every qwen vision model measured.
+# Groq compares max_tokens against that limit on its own and refuses the whole
+# request when it is larger, before generating a single token — so 1024 fails
+# outright while 900 succeeds even with the minute's budget already spent.
+# A fresh minute lets 1024 through, which makes the bug look intermittent.
+GROQ_MAX_TOKENS: int = int(os.getenv("GROQ_MAX_TOKENS", "900"))
+
+# Thinking budget. These models narrate a long <think> monologue before the
+# answer, and that monologue is billed against the output-per-minute allowance
+# that the free tier caps hardest. Turning it off is the single biggest saving.
+# The accepted values differ by model family: qwen takes none/default, gpt-oss
+# takes low/medium/high. An empty value sends nothing and leaves the default.
+GROQ_REASONING_VISION: str = os.getenv("GROQ_REASONING_VISION", "none")
+GROQ_REASONING_TEXT: str = os.getenv("GROQ_REASONING_TEXT", "low")
+
+# How many times the SDK may retry by itself. Its own default is 2, and a
+# retried 429 blocks for the whole reset window — measured at 44 and 47 seconds
+# on consecutive captures — leaving a blank popup with nothing to read. Failing
+# at once surfaces the countdown instead, and the hotkey is one keypress away.
+GROQ_MAX_RETRIES: int = int(os.getenv("GROQ_MAX_RETRIES", "0"))
+
 PROMPT = (
     "You are an expert software engineer. Solve the technical/coding problem shown in the "
     "image or text. Read it carefully and give a correct, working solution.\n"

@@ -16,6 +16,7 @@ Discreet background daemon for Windows that captures screenshots or listens to s
 - **Screenshot mode** — captures only the monitor where your cursor is
 - **Audio mode** — captures system audio via WASAPI loopback (hears the interviewer on a call, not your mic)
 - **Web mode (`-w`)** — serves answers to your phone over the LAN (scan a terminal QR), auto-updating via SSE; nothing shows on a shared screen
+- **Region capture (`-r`)** — grabs a 16:9 box around the cursor instead of the whole monitor, so the model reads the problem and not the rest of your desktop
 - **Prior context (`-c`)** — point it at a `.md` or `.txt` file (the job posting, the stack, your own experience) and the model answers oriented to it instead of cold
 - **Interview-style responses** — direct, confident, no filler
 - **Responds in the question's language** — Spanish question → Spanish answer
@@ -49,11 +50,35 @@ Create a `.env` file in the project root:
 GROQ_API_KEY=gsk_your_key_here
 ```
 
+Optional keys, all with sensible defaults:
+
+- `GROQ_MODEL_VISION` — model used for screenshot mode
+- `GROQ_MODEL_TEXT` — model used for audio and text mode
+- `GROQ_MAX_TOKENS` — cap on the answer length, default `900`
+- `GROQ_REASONING_VISION` / `GROQ_REASONING_TEXT` — thinking budget, default `none` and `low`
+
+Keep `GROQ_MAX_TOKENS` below your account's output-tokens-per-minute allowance, which is 1000 on the free tier. Groq compares the cap against that limit by itself and refuses the whole request with a 429 before generating anything, so 1024 fails while 900 works. A fresh minute lets the larger value through, which makes the failure look intermittent when it is not.
+
+The thinking budget matters more than it looks. Left at the model default, a reasoning model spends most of its output allowance narrating to itself before it answers, and on the free tier that allowance is the first thing to run out. The accepted values differ by model family: qwen takes `none` or `default`, gpt-oss takes `low`, `medium` or `high`. A value the model rejects is dropped automatically.
+
 ### 4. Run
 
 ```bash
 python main.py
 ```
+
+Capture a box around the cursor instead of the whole monitor:
+
+```bash
+python main.py -r            # 1280x720 around the cursor
+python main.py -r 960x540    # a tighter box
+```
+
+Keep the box 16:9. Groq prices an image by its aspect ratio rather than its pixel count, so 1280x720 and 640x360 both cost 783 input tokens while a 4:3 box of the same content costs 1807. Near a screen edge the box slides inward instead of shrinking, which keeps that ratio constant. A box larger than the monitor falls back to the full monitor.
+
+Region mode is about accuracy, not cost: a full monitor and a region cost the same. What it buys is a model that is not reading your taskbar.
+
+Old captures are pruned at startup, keeping the newest 20.
 
 Show the popup on the **primary** monitor instead of the secondary:
 
@@ -81,6 +106,12 @@ UTF-8 text, is empty, or is too large, Phonexi prints the reason and exits witho
 starting — you find out on launch, not mid-interview. The flag is optional and
 combines with `-P` and `-w`.
 
+Only the sections that answer the question are sent, not the whole file. Groq's
+free tier allows 8,000 tokens per minute and a full ficha costs about 4,200 of
+them, so sending it whole capped you at one question per minute; picking sections
+brings a question down to 1,000-1,800 tokens. The rules block above the first
+numbered section always travels with them. See `phonexi/relevance.py`.
+
 Keep those files in `contexts/` — see [`contexts/README.md`](contexts/README.md)
 for what to put in one and why the files themselves are never committed.
 
@@ -102,6 +133,7 @@ Phonexi/
 ├── contexts/             # Your -c context files (git-ignored; see its README)
 ├── phonexi/
 │   ├── briefing.py       # Optional -c prior-context file: load + validate
+│   ├── relevance.py      # Picks the ficha sections each question needs
 │   ├── config.py         # Env config (API key, model, prompt)
 │   ├── screenshot.py     # Per-monitor screenshot capture
 │   ├── processor.py      # Groq vision + text LLM streaming

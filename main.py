@@ -7,6 +7,7 @@ import tkinter as tk
 from phonexi.briefing import ALLOWED_SUFFIXES, BriefingError
 from phonexi.briefing import load as load_briefing
 from phonexi.listener import HotkeyListener
+from phonexi.screenshot import DEFAULT_REGION, parse_region, prune
 
 
 def _parse_args() -> argparse.Namespace:
@@ -23,13 +24,29 @@ def _parse_args() -> argparse.Namespace:
              "instead of the on-screen popup.",
     )
     parser.add_argument(
+        "-r", "--region",
+        nargs="?",
+        const=f"{DEFAULT_REGION[0]}x{DEFAULT_REGION[1]}",
+        default=None,
+        metavar="WIDTHxHEIGHT",
+        help="Capture a box around the cursor instead of the whole monitor "
+             f"(default {DEFAULT_REGION[0]}x{DEFAULT_REGION[1]}). Keep it 16:9: "
+             "Groq prices an image by aspect ratio, and other shapes cost more.",
+    )
+    parser.add_argument(
         "-c", "--context",
         metavar="FILE",
         default=None,
         help=f"Path to a prior-context file ({' or '.join(ALLOWED_SUFFIXES)}) read at "
              "startup so answers come out oriented instead of cold.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.region is not None:
+        try:
+            args.region = parse_region(args.region)
+        except ValueError as exc:
+            parser.error(f"--region: {exc}")
+    return args
 
 
 def _print_qr(url: str) -> None:
@@ -58,7 +75,7 @@ def _read_context(path: "str | None") -> "str | None":
     return text
 
 
-def _run_web(briefing: "str | None" = None) -> None:
+def _run_web(briefing: "str | None" = None, region: "tuple | None" = None) -> None:
     from phonexi.webserver import WebServer, WebView, lan_ip
 
     server = WebServer()
@@ -78,6 +95,7 @@ def _run_web(briefing: "str | None" = None) -> None:
         tk_root=None,
         view_factory=lambda: WebView(server),
         briefing=briefing,
+        region=region,
     )
     t = threading.Thread(target=listener.start, daemon=True)
     t.start()
@@ -90,7 +108,8 @@ def _run_web(briefing: "str | None" = None) -> None:
         server.stop()
 
 
-def _run_popup(use_primary: bool, briefing: "str | None" = None) -> None:
+def _run_popup(use_primary: bool, briefing: "str | None" = None,
+               region: "tuple | None" = None) -> None:
     root = tk.Tk()
     root.withdraw()
 
@@ -98,6 +117,7 @@ def _run_popup(use_primary: bool, briefing: "str | None" = None) -> None:
         tk_root=root,
         use_primary=use_primary,
         briefing=briefing,
+        region=region,
     )
     t = threading.Thread(target=listener.start, daemon=True)
     t.start()
@@ -114,10 +134,13 @@ def _run_popup(use_primary: bool, briefing: "str | None" = None) -> None:
 def main() -> None:
     args = _parse_args()
     briefing = _read_context(args.context)
+    prune()
+    if args.region:
+        print(f"[Phonexi] Region mode: {args.region[0]}x{args.region[1]} around the cursor.")
     if args.web:
-        _run_web(briefing)
+        _run_web(briefing, args.region)
     else:
-        _run_popup(args.primary, briefing)
+        _run_popup(args.primary, briefing, args.region)
 
 
 if __name__ == "__main__":
