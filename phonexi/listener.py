@@ -105,10 +105,10 @@ class HotkeyListener:
                     user_turn="[Screenshot of interview question]",
                     assistant_turn=response,
                 )
-        except GroqNotConfiguredError:
-            self._schedule(win.show_error, "GROQ_API_KEY not set — add it to .env")
+        except GroqNotConfiguredError as exc:
+            self._schedule(win.show_error, f"{exc.key_name} not set — add it to .env")
         except GroqAPIError as exc:
-            self._schedule(win.show_error, f"Groq error: {exc}")
+            self._schedule(win.show_error, str(exc))
         except Exception as exc:
             self._schedule(win.show_error, f"Error: {exc}")
 
@@ -152,6 +152,13 @@ class HotkeyListener:
 
         try:
             text = transcribe(wav_bytes)
+        except GroqNotConfiguredError as exc:
+            if win is self._current_window:
+                self._schedule(
+                    win.show_error,
+                    f"{exc.key_name} not set — audio is transcribed by Groq Whisper",
+                )
+            return
         except Exception as exc:
             if win is self._current_window:
                 self._schedule(win.show_error, f"Transcription error: {exc}")
@@ -170,10 +177,10 @@ class HotkeyListener:
             )
             if response:
                 self._context = Context(user_turn=text, assistant_turn=response)
-        except GroqNotConfiguredError:
-            self._schedule(win.show_error, "GROQ_API_KEY not set — add it to .env")
+        except GroqNotConfiguredError as exc:
+            self._schedule(win.show_error, f"{exc.key_name} not set — add it to .env")
         except GroqAPIError as exc:
-            self._schedule(win.show_error, f"Groq error: {exc}")
+            self._schedule(win.show_error, str(exc))
         except Exception as exc:
             self._schedule(win.show_error, f"Error: {exc}")
 

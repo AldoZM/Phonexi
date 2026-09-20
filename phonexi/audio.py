@@ -7,6 +7,7 @@ import pyaudiowpatch as pyaudio
 from groq import Groq
 
 from phonexi.config import GROQ_API_KEY
+from phonexi.processor import GroqNotConfiguredError
 
 _CHUNK = 512
 _WHISPER_MODEL = "whisper-large-v3-turbo"
@@ -81,6 +82,9 @@ def record(stop_event: threading.Event) -> bytes:
 
 
 def transcribe(wav_bytes: bytes) -> str:
+    # Whisper stays on Groq whichever provider answers, so audio needs its key.
+    if not GROQ_API_KEY:
+        raise GroqNotConfiguredError("GROQ_API_KEY")
     client = Groq(api_key=GROQ_API_KEY)
     result = client.audio.transcriptions.create(
         file=("audio.wav", wav_bytes),

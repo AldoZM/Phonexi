@@ -34,6 +34,16 @@ GROQ_REASONING_TEXT: str = os.getenv("GROQ_REASONING_TEXT", "low")
 # at once surfaces the countdown instead, and the hotkey is one keypress away.
 GROQ_MAX_RETRIES: int = int(os.getenv("GROQ_MAX_RETRIES", "0"))
 
+# Gemini, reached through Google's OpenAI-compatible endpoint. One Flash model
+# reads text and images, so it serves both modes unless -model picks another.
+GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+# Groq's 900 cap is a Groq free-tier limit, not a model one — Gemini has none.
+GEMINI_MAX_TOKENS: int = int(os.getenv("GEMINI_MAX_TOKENS", "2048"))
+# Gemini spells the levels minimal/low/medium/high.
+GEMINI_REASONING: str = os.getenv("GEMINI_REASONING", "low")
+
 PROMPT = (
     "You are an expert software engineer. Solve the technical/coding problem shown in the "
     "image or text. Read it carefully and give a correct, working solution.\n"

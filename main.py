@@ -7,11 +7,56 @@ import tkinter as tk
 from phonexi.briefing import ALLOWED_SUFFIXES, BriefingError
 from phonexi.briefing import load as load_briefing
 from phonexi.listener import HotkeyListener
+from phonexi.picker import PickerUnavailableError, choose
+from phonexi.providers import (
+    activate,
+    available_models,
+    default_selection,
+    key_order,
+    selection_for,
+)
 from phonexi.screenshot import DEFAULT_REGION, parse_region, prune
+
+EPILOG = """Examples:
+  python main.py                      popup on the secondary monitor
+  python main.py -model               pick the model with the arrow keys first
+  python main.py -c contexts/me.md    answer with a prior-context file
+  python main.py -r 1600x900 -P       capture a box around the cursor, popup on primary
+  python main.py -w                   read answers on your phone instead
+
+Hotkeys:
+  Right Shift + P    capture the screen and answer
+  Right Alt + P      start / stop listening to the call audio
+
+Settings in .env:
+  GROQ_API_KEY, GEMINI_API_KEY   the key written highest picks the default provider
+  GROQ_MODEL_TEXT, GROQ_MODEL_VISION, GEMINI_MODEL   default models
+  GROQ_MAX_TOKENS, GEMINI_MAX_TOKENS                 answer length cap
+  GROQ_REASONING_TEXT, GROQ_REASONING_VISION, GEMINI_REASONING   thinking budget
+  Audio is always transcribed by Groq Whisper, so it needs GROQ_API_KEY.
+"""
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Phonexi interview assistant.")
+    parser = argparse.ArgumentParser(
+        description="Phonexi interview assistant.",
+        epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=False,
+    )
+    # Declared by hand so the single-dash long spellings work too: without
+    # it argparse would read -help as -h and -model as -m with "odel".
+    parser.add_argument(
+        "-h", "-help", "--help",
+        action="help",
+        help="Show this help and exit.",
+    )
+    parser.add_argument(
+        "-m", "-model", "--model",
+        action="store_true",
+        help="Choose the model with the arrow keys before starting. Without it "
+             "the provider whose key is written highest in .env is used.",
+    )
     parser.add_argument(
         "-P", "--primary",
         action="store_true",
@@ -131,8 +176,37 @@ def _run_popup(use_primary: bool, briefing: "str | None" = None,
         print("\n[Phonexi] Stopped.")
 
 
+def _choose_provider(pick: bool) -> None:
+    """Activate the model to answer with — picked by hand, or the top key's."""
+    order = key_order()
+    default = default_selection(order)
+    if pick:
+        models = available_models(order)
+        start = next((i for i, m in enumerate(models)
+                      if m.provider == default.provider
+                      and m.name in (default.text_model, default.vision_model)), 0)
+        try:
+            chosen = choose(models, start=start)
+        except PickerUnavailableError as exc:
+            print(f"[Phonexi] {exc}")
+            raise SystemExit(1)
+        if chosen is None:
+            print("[Phonexi] Cancelled.")
+            raise SystemExit(0)
+        selection = selection_for(chosen)
+    else:
+        selection = default
+    activate(selection)
+    if selection.text_model == selection.vision_model:
+        print(f"[Phonexi] Using {selection.provider}: {selection.text_model}")
+    else:
+        print(f"[Phonexi] Using {selection.provider}: {selection.text_model} (text), "
+              f"{selection.vision_model} (captures)")
+
+
 def main() -> None:
     args = _parse_args()
+    _choose_provider(args.model)
     briefing = _read_context(args.context)
     prune()
     if args.region:

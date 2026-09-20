@@ -192,3 +192,91 @@ def test_main_prunes_old_captures_at_startup():
         main.main()
 
     mock_prune.assert_called_once()
+
+
+# ── -model / provider selection ──────────────────────────────────────────────
+
+@pytest.mark.parametrize("flag", ["-model", "--model", "-m"])
+def test_parse_args_model_flag_spellings(flag):
+    with patch.object(sys, "argv", ["main.py", flag]):
+        assert main._parse_args().model is True
+
+
+def test_parse_args_model_default_false():
+    with patch.object(sys, "argv", ["main.py"]):
+        assert main._parse_args().model is False
+
+
+@pytest.mark.parametrize("flag", ["-h", "-help", "--help"])
+def test_help_flag_spellings_print_help(flag, capsys):
+    with patch.object(sys, "argv", ["main.py", flag]):
+        with pytest.raises(SystemExit) as info:
+            main._parse_args()
+    assert info.value.code == 0
+    out = capsys.readouterr().out
+    assert "-model" in out
+    assert "GEMINI_API_KEY" in out
+    assert "Examples" in out
+
+
+def test_main_without_model_flag_activates_the_top_key():
+    from phonexi.providers import GEMINI
+    with patch.object(sys, "argv", ["main.py"]), \
+         patch("main.key_order", return_value=[GEMINI]), \
+         patch("main.choose") as mock_choose, \
+         patch("main.activate") as mock_activate, \
+         patch("main._run_popup"):
+        main.main()
+    mock_choose.assert_not_called()
+    assert mock_activate.call_args.args[0].provider == GEMINI
+
+
+def test_main_model_flag_activates_the_chosen_model():
+    from phonexi.providers import find
+    picked = find("gemini-3.8-flash")
+    with patch.object(sys, "argv", ["main.py", "-model"]), \
+         patch("main.key_order", return_value=["gemini", "groq"]), \
+         patch("main.choose", return_value=picked), \
+         patch("main.activate") as mock_activate, \
+         patch("main._run_popup") as mock_run:
+        main.main()
+    sel = mock_activate.call_args.args[0]
+    assert sel.text_model == sel.vision_model == "gemini-3.8-flash"
+    mock_run.assert_called_once()
+
+
+def test_main_model_flag_cancelled_exits_without_starting():
+    with patch.object(sys, "argv", ["main.py", "-model"]), \
+         patch("main.key_order", return_value=["gemini"]), \
+         patch("main.choose", return_value=None), \
+         patch("main._run_popup") as mock_run:
+        with pytest.raises(SystemExit) as info:
+            main.main()
+    assert info.value.code == 0
+    mock_run.assert_not_called()
+
+
+def test_main_model_flag_without_terminal_exits_with_error(capsys):
+    from phonexi.picker import PickerUnavailableError
+    with patch.object(sys, "argv", ["main.py", "-model"]), \
+         patch("main.key_order", return_value=["gemini"]), \
+         patch("main.choose", side_effect=PickerUnavailableError("no terminal")), \
+         patch("main._run_popup") as mock_run:
+        with pytest.raises(SystemExit) as info:
+            main.main()
+    assert info.value.code == 1
+    mock_run.assert_not_called()
+    assert "no terminal" in capsys.readouterr().out
+
+
+def test_main_model_flag_starts_on_the_current_default():
+    with patch.object(sys, "argv", ["main.py", "-model"]), \
+         patch("main.key_order", return_value=["groq", "gemini"]), \
+         patch("main.choose", return_value=None) as mock_choose, \
+         patch("main._run_popup"):
+        with pytest.raises(SystemExit):
+            main.main()
+    models = mock_choose.call_args.args[0]
+    start = mock_choose.call_args.kwargs["start"]
+    assert models[start].provider == "groq"
+

@@ -59,13 +59,32 @@ Optional keys, all with sensible defaults:
 
 Keep `GROQ_MAX_TOKENS` below your account's output-tokens-per-minute allowance, which is 1000 on the free tier. Groq compares the cap against that limit by itself and refuses the whole request with a 429 before generating anything, so 1024 fails while 900 works. A fresh minute lets the larger value through, which makes the failure look intermittent when it is not.
 
+**Gemini (optional).** Add `GEMINI_API_KEY` from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — the free tier needs no card. Whichever key is written **highest** in `.env` picks the default provider; move a line up to switch. Gemini keys: `GEMINI_MODEL` (default `gemini-3.8-flash`, used for text and captures), `GEMINI_MAX_TOKENS` (default `2048`), `GEMINI_REASONING` (`low`, `medium` or `high`; `gemini-3.8-flash` refuses `minimal`). Audio is still transcribed by Groq Whisper, so audio mode needs `GROQ_API_KEY` either way. On the free tier Google may use prompts and captures to improve its products.
+
 The thinking budget matters more than it looks. Left at the model default, a reasoning model spends most of its output allowance narrating to itself before it answers, and on the free tier that allowance is the first thing to run out. The accepted values differ by model family: qwen takes `none` or `default`, gpt-oss takes `low`, `medium` or `high`. A value the model rejects is dropped automatically.
 
 ### 4. Run
 
 ```bash
 python main.py
+python main.py -help     # every flag, examples and .env settings
 ```
+
+Pick the model by hand before starting — only providers with a key are listed:
+
+```bash
+python main.py -model
+```
+
+```
+Choose a model (Up/Down, Enter to confirm, Esc to cancel):
+> gemini  gemini-3.8-flash        text, vision, audio
+  gemini  gemini-3.1-flash-lite   text, vision, audio
+  groq    openai/gpt-oss-120b     text
+  groq    qwen/qwen3.8-27b        text, vision
+```
+
+Gemini's free tier answers 503 when a model is busy. Phonexi then retries once on another Gemini model (3.8-flash first) and the popup opens with a line saying which one answered; only if that one is busy too does the popup show the error. A model that reads images answers both hotkeys; a text-only one answers audio and leaves captures on the `.env` vision model. `-model` needs a console, so it does not work from `start_phonexi.vbs`.
 
 Capture a box around the cursor instead of the whole monitor:
 
@@ -136,12 +155,14 @@ Phonexi/
 │   ├── relevance.py      # Picks the ficha sections each question needs
 │   ├── config.py         # Env config (API key, model, prompt)
 │   ├── screenshot.py     # Per-monitor screenshot capture
-│   ├── processor.py      # Groq vision + text LLM streaming
+│   ├── processor.py      # Vision + text LLM streaming (Groq or Gemini)
+│   ├── providers.py      # Model catalog, key order, active selection
+│   ├── picker.py         # Arrow-key model picker for -model
 │   ├── audio.py          # WASAPI loopback capture + Whisper transcription
 │   ├── listener.py       # Hotkey detection + orchestration (view-agnostic via view_factory)
 │   ├── ui.py             # Dark draggable popup with syntax highlighting
 │   └── webserver.py      # Web mode: local HTTP + SSE, QR, phone-readable page
-├── tests/                # pytest suite (85 tests)
+├── tests/                # pytest suite (217 tests)
 ├── requirements.txt
 ├── .env                  # NOT committed — add your key here
 └── context.txt           # Full project context for AI assistants

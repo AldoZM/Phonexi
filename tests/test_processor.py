@@ -547,3 +547,262 @@ def test_default_retry_count_is_zero():
     from phonexi import config
 
     assert config.GROQ_MAX_RETRIES == 0
+
+
+# ── Gemini provider ──────────────────────────────────────────────────────────
+
+@pytest.fixture
+def gemini_active():
+    from phonexi import providers
+    before = providers.active()
+    providers.activate(providers.Selection(providers.GEMINI, "gemini-text", "gemini-vision"))
+    yield
+    providers.activate(before)
+
+
+def _gemini_rate_limit(body: str, headers: "dict | None" = None):
+    import httpx
+    from openai import RateLimitError
+
+    request = httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
+    response = httpx.Response(429, request=request, text=body, headers=headers or {})
+    return RateLimitError(body, response=response, body=None)
+
+
+def test_gemini_text_uses_the_openai_client_on_google_endpoint(gemini_active):
+    client = _mock_client()
+    with patch("phonexi.processor.GEMINI_API_KEY", "g-key"), \
+         patch("phonexi.processor.OpenAI", return_value=client) as openai_cls, \
+         patch("phonexi.processor.Groq") as groq_cls:
+        list(process_text("hi"))
+
+    groq_cls.assert_not_called()
+    kwargs = openai_cls.call_args.kwargs
+    assert kwargs["api_key"] == "g-key"
+    assert "generativelanguage.googleapis.com" in kwargs["base_url"]
+    assert client.chat.completions.create.call_args.kwargs["model"] == "gemini-text"
+
+
+def test_gemini_image_uses_the_vision_model(tmp_path, gemini_active):
+    client = _mock_client()
+    with patch("phonexi.processor.GEMINI_API_KEY", "g-key"), \
+         patch("phonexi.processor.OpenAI", return_value=client):
+        list(process(_png(tmp_path)))
+
+    assert client.chat.completions.create.call_args.kwargs["model"] == "gemini-vision"
+
+
+def test_gemini_uses_its_own_answer_cap(gemini_active):
+    client = _mock_client()
+    with patch("phonexi.processor.GEMINI_API_KEY", "g-key"), \
+         patch("phonexi.processor.GEMINI_MAX_TOKENS", 4000), \
+         patch("phonexi.processor.OpenAI", return_value=client):
+        list(process_text("hi"))
+
+    assert client.chat.completions.create.call_args.kwargs["max_tokens"] == 4000
+
+
+def test_gemini_missing_key_names_the_gemini_variable(gemini_active):
+    with patch("phonexi.processor.GEMINI_API_KEY", ""):
+        with pytest.raises(GroqNotConfiguredError) as info:
+            list(process_text("hi"))
+    assert info.value.key_name == "GEMINI_API_KEY"
+
+
+def test_groq_missing_key_still_names_the_groq_variable():
+    with patch("phonexi.processor.GROQ_API_KEY", ""):
+        with pytest.raises(GroqNotConfiguredError) as info:
+            list(process_text("hi"))
+    assert info.value.key_name == "GROQ_API_KEY"
+
+
+def test_gemini_rate_limit_becomes_a_readable_line(gemini_active):
+    from phonexi.processor import GroqAPIError
+
+    client = MagicMock()
+    client.chat.completions.create.side_effect = _gemini_rate_limit(
+        '{"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": '
+        '"You exceeded your current quota. Please retry in 23.4s."}}'
+    )
+    with patch("phonexi.processor.GEMINI_API_KEY", "g-key"), \
+         patch("phonexi.processor.OpenAI", return_value=client):
+        with pytest.raises(GroqAPIError) as info:
+            list(process_text("hi"))
+
+    msg = str(info.value)
+    assert msg.startswith("Gemini:")
+    assert "24s" in msg
+    assert "RESOURCE_EXHAUSTED" not in msg
+
+
+def test_gemini_rate_limit_prefers_the_retry_after_header():
+    from phonexi.processor import _gemini_rate_limit_message
+
+    exc = _gemini_rate_limit("quota exceeded", headers={"retry-after": "7"})
+    assert "7s" in _gemini_rate_limit_message(exc)
+
+
+def test_gemini_rate_limit_names_the_daily_quota():
+    from phonexi.processor import _gemini_rate_limit_message
+
+    exc = _gemini_rate_limit(
+        "Quota exceeded for metric generate_content_free_tier_requests, "
+        "limit: GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+    )
+    assert "daily" in _gemini_rate_limit_message(exc)
+
+
+def test_gemini_rejected_reasoning_effort_is_retried_without_it(gemini_active):
+    import httpx
+    from openai import BadRequestError
+
+    request = httpx.Request("POST", "https://generativelanguage.googleapis.com/x")
+    bad = BadRequestError(
+        "Invalid reasoning_effort value",
+        response=httpx.Response(400, request=request, text="bad"),
+        body=None,
+    )
+    client = _mock_client()
+    good = client.chat.completions.create.return_value
+    client.chat.completions.create.side_effect = [bad, good]
+    with patch("phonexi.processor.GEMINI_API_KEY", "g-key"), \
+         patch("phonexi.processor.GEMINI_REASONING", "minimal"), \
+         patch("phonexi.processor.OpenAI", return_value=client):
+        list(process_text("hi"))
+
+    assert "reasoning_effort" not in client.chat.completions.create.call_args.kwargs
+
+
+def test_gemini_unsupported_thinking_level_is_retried_without_it(gemini_active):
+    # Real 400 from gemini-3.8-flash: it never names the reasoning_effort field.
+    import httpx
+    from openai import BadRequestError
+
+    request = httpx.Request("POST", "https://generativelanguage.googleapis.com/x")
+    bad = BadRequestError(
+        "Error code: 400 - Thinking level MINIMAL is not supported for this model.",
+        response=httpx.Response(400, request=request, text="bad"),
+        body=None,
+    )
+    client = _mock_client()
+    good = client.chat.completions.create.return_value
+    client.chat.completions.create.side_effect = [bad, good]
+    with patch("phonexi.processor.GEMINI_API_KEY", "g-key"), \
+         patch("phonexi.processor.GEMINI_REASONING", "minimal"), \
+         patch("phonexi.processor.OpenAI", return_value=client):
+        list(process_text("hi"))
+
+    assert "reasoning_effort" not in client.chat.completions.create.call_args.kwargs
+
+
+def test_overloaded_model_becomes_a_readable_line(gemini_active):
+    import httpx
+    from openai import InternalServerError
+    from phonexi.processor import GroqAPIError
+
+    request = httpx.Request("POST", "https://generativelanguage.googleapis.com/x")
+    body = ("Error code: 503 - [{'error': {'code': 503, 'message': 'This model is "
+            "currently experiencing high demand.', 'status': 'UNAVAILABLE'}}]")
+    client = MagicMock()
+    client.chat.completions.create.side_effect = InternalServerError(
+        body, response=httpx.Response(503, request=request, text=body), body=None,
+    )
+    with patch("phonexi.processor.GEMINI_API_KEY", "g-key"), \
+         patch("phonexi.processor.OpenAI", return_value=client):
+        with pytest.raises(GroqAPIError) as info:
+            list(process_text("hi"))
+
+    msg = str(info.value)
+    assert msg.startswith("Gemini:")
+    assert "overloaded" in msg
+    assert "-model" in msg
+    assert "UNAVAILABLE" not in msg
+
+
+def _overloaded():
+    import httpx
+    from openai import InternalServerError
+
+    request = httpx.Request("POST", "https://generativelanguage.googleapis.com/x")
+    body = "Error code: 503 - This model is currently experiencing high demand."
+    return InternalServerError(
+        body, response=httpx.Response(503, request=request, text=body), body=None,
+    )
+
+
+def _chunk(text):
+    c = MagicMock()
+    c.choices = [MagicMock()]
+    c.choices[0].delta.content = text
+    return c
+
+
+@pytest.fixture
+def gemini_35_active():
+    from phonexi import providers
+    before = providers.active()
+    providers.activate(providers.Selection(
+        providers.GEMINI, "gemini-3.5-flash", "gemini-3.5-flash"))
+    yield
+    providers.activate(before)
+
+
+def test_busy_gemini_model_falls_back_once_and_says_so(gemini_35_active):
+    client = MagicMock()
+    client.chat.completions.create.side_effect = [_overloaded(), iter([_chunk("answer")])]
+    with patch("phonexi.processor.GEMINI_API_KEY", "g-key"), \
+         patch("phonexi.processor.GEMINI_REASONING", ""), \
+         patch("phonexi.processor.OpenAI", return_value=client):
+        out = "".join(process_text("hi"))
+
+    models = [c.kwargs["model"] for c in client.chat.completions.create.call_args_list]
+    assert models == ["gemini-3.5-flash", "gemini-3.8-flash"]
+    assert "gemini-3.5-flash" in out and "gemini-3.8-flash" in out
+    assert out.endswith("answer")
+
+
+def test_busy_gemini_capture_falls_back_too(tmp_path, gemini_35_active):
+    client = MagicMock()
+    client.chat.completions.create.side_effect = [_overloaded(), iter([_chunk("ok")])]
+    with patch("phonexi.processor.GEMINI_API_KEY", "g-key"), \
+         patch("phonexi.processor.GEMINI_REASONING", ""), \
+         patch("phonexi.processor.OpenAI", return_value=client):
+        out = "".join(process(_png(tmp_path)))
+
+    assert client.chat.completions.create.call_args.kwargs["model"] == "gemini-3.8-flash"
+    assert out.endswith("ok")
+
+
+def test_fallback_busy_too_shows_the_overloaded_line(gemini_35_active):
+    from phonexi.processor import GroqAPIError
+
+    client = MagicMock()
+    client.chat.completions.create.side_effect = [_overloaded(), _overloaded()]
+    with patch("phonexi.processor.GEMINI_API_KEY", "g-key"), \
+         patch("phonexi.processor.GEMINI_REASONING", ""), \
+         patch("phonexi.processor.OpenAI", return_value=client):
+        with pytest.raises(GroqAPIError) as info:
+            list(process_text("hi"))
+
+    assert client.chat.completions.create.call_count == 2
+    assert "overloaded" in str(info.value)
+
+
+def test_groq_overload_does_not_switch_models():
+    import httpx
+    from groq import InternalServerError
+    from phonexi.processor import GroqAPIError
+
+    request = httpx.Request("POST", "https://api.groq.com/x")
+    err = InternalServerError(
+        "busy", response=httpx.Response(503, request=request, text="busy"), body=None,
+    )
+    client = MagicMock()
+    client.chat.completions.create.side_effect = err
+    with patch("phonexi.processor.GROQ_API_KEY", "k"), \
+         patch("phonexi.processor.GROQ_REASONING_TEXT", ""), \
+         patch("phonexi.processor.Groq", return_value=client):
+        with pytest.raises(GroqAPIError):
+            list(process_text("hi"))
+
+    assert client.chat.completions.create.call_count == 1

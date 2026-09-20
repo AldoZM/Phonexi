@@ -4,23 +4,40 @@ import re
 from pathlib import Path
 from typing import Iterator
 
-from groq import BadRequestError, Groq, RateLimitError
+import groq
+import openai
+from groq import Groq
+from openai import OpenAI
 
+from phonexi import providers
 from phonexi.config import (
+    GEMINI_API_KEY,
+    GEMINI_BASE_URL,
+    GEMINI_MAX_TOKENS,
+    GEMINI_REASONING,
     GROQ_API_KEY,
     GROQ_MAX_RETRIES,
     GROQ_MAX_TOKENS,
-    GROQ_MODEL_TEXT,
-    GROQ_MODEL_VISION,
     GROQ_REASONING_TEXT,
     GROQ_REASONING_VISION,
     PROMPT,
 )
 from phonexi.relevance import select
 
+# Both SDKs share the OpenAI error shapes but define their own classes.
+_BAD_REQUEST = (groq.BadRequestError, openai.BadRequestError)
+_SERVER_ERROR = (groq.InternalServerError, openai.InternalServerError)
+
+# Groq names the field in its 400; Gemini only names the level it refused.
+_REASONING_REJECTED = ("reasoning_effort", "Thinking level")
+
 
 class GroqNotConfiguredError(Exception):
-    pass
+    """The active provider has no API key; key_name says which one to set."""
+
+    def __init__(self, key_name: str = "GROQ_API_KEY") -> None:
+        super().__init__(f"{key_name} not set")
+        self.key_name = key_name
 
 
 class GroqAPIError(Exception):
@@ -122,12 +139,48 @@ def _rate_limit_message(exc: Exception) -> str:
     return "Groq: " + what + "." + tail
 
 
-def _client() -> Groq:
+def _gemini_rate_limit_message(exc: Exception) -> str:
+    """Gemini's 429 is a RESOURCE_EXHAUSTED JSON; keep only what ran out and the wait."""
+    raw = str(exc)
+    what = ("the daily quota is used up" if "PerDay" in raw
+            else "the per-minute quota is used up")
+    # Retry-After is plain seconds with no unit, unlike Groq's reset headers.
+    header = _reset_header(exc, "retry-after")
+    seconds = float(header) if header and header.replace(".", "", 1).isdigit() else None
+    if seconds is None:
+        body = re.search(r'retry(?:Delay"?:\s*"| in )([\d.]+)s', raw, re.IGNORECASE)
+        seconds = float(body.group(1)) if body else None
+    tail = f" Retry in {_format_wait(seconds)}." if seconds is not None else " Wait about a minute."
+    return "Gemini: " + what + "." + tail
+
+
+def _require_key() -> str:
+    """The active provider's key, or the error that names the variable to set."""
+    if providers.active().provider == providers.GEMINI:
+        if not GEMINI_API_KEY:
+            raise GroqNotConfiguredError("GEMINI_API_KEY")
+        return GEMINI_API_KEY
+    if not GROQ_API_KEY:
+        raise GroqNotConfiguredError("GROQ_API_KEY")
+    return GROQ_API_KEY
+
+
+def _client():
     """Build the API client with retries under our control, not the SDK's."""
-    return Groq(api_key=GROQ_API_KEY, max_retries=GROQ_MAX_RETRIES)
+    key = _require_key()
+    if providers.active().provider == providers.GEMINI:
+        return OpenAI(api_key=key, base_url=GEMINI_BASE_URL, max_retries=GROQ_MAX_RETRIES)
+    return Groq(api_key=key, max_retries=GROQ_MAX_RETRIES)
 
 
-def _open_stream(client: Groq, reasoning_effort: str, **kwargs):
+def _limits(vision: bool) -> tuple[int, str]:
+    """Answer cap and reasoning level for the active provider and mode."""
+    if providers.active().provider == providers.GEMINI:
+        return GEMINI_MAX_TOKENS, GEMINI_REASONING
+    return GROQ_MAX_TOKENS, (GROQ_REASONING_VISION if vision else GROQ_REASONING_TEXT)
+
+
+def _open_stream(client, reasoning_effort: str, **kwargs):
     """Open the stream, dropping reasoning_effort if this model rejects it.
 
     Each model family names the levels differently, so a model swap in .env
@@ -138,22 +191,46 @@ def _open_stream(client: Groq, reasoning_effort: str, **kwargs):
             return client.chat.completions.create(
                 stream=True, reasoning_effort=reasoning_effort, **kwargs
             )
-        except BadRequestError as exc:
-            if "reasoning_effort" not in str(exc):
+        except _BAD_REQUEST as exc:
+            if not any(marker in str(exc) for marker in _REASONING_REJECTED):
                 raise
     return client.chat.completions.create(stream=True, **kwargs)
 
 
-def _stream_tokens(client: Groq, reasoning_effort: str = "", **kwargs) -> Iterator[str]:
+def _stream_tokens(client, reasoning_effort: str = "", **kwargs) -> Iterator[str]:
     """Yield content tokens, collapsing a 429 into a readable GroqAPIError."""
     try:
-        stream = _open_stream(client, reasoning_effort, **kwargs)
+        try:
+            stream = _open_stream(client, reasoning_effort, **kwargs)
+        except _SERVER_ERROR as exc:
+            # One retry on another Gemini model: the free tier's 503 is per
+            # model, and a lost question mid-interview costs more than a switch.
+            if (getattr(exc, "status_code", None) != 503
+                    or providers.active().provider != providers.GEMINI):
+                raise
+            busy = kwargs["model"]
+            kwargs["model"] = providers.fallback_for(busy)
+            stream = _open_stream(client, reasoning_effort, **kwargs)
+            yield f"[{busy} was overloaded; answered by {kwargs['model']}]\n\n"
         for chunk in stream:
+            if not chunk.choices:
+                continue
             token = chunk.choices[0].delta.content
             if token:
                 yield token
-    except RateLimitError as exc:
+    except groq.RateLimitError as exc:
         raise GroqAPIError(_rate_limit_message(exc)) from exc
+    except openai.RateLimitError as exc:
+        raise GroqAPIError(_gemini_rate_limit_message(exc)) from exc
+    except _SERVER_ERROR as exc:
+        # A 503 is a busy model, not a broken request — say so instead of the JSON.
+        if getattr(exc, "status_code", None) != 503:
+            raise
+        name = "Gemini" if providers.active().provider == providers.GEMINI else "Groq"
+        raise GroqAPIError(
+            f"{name}: the model is overloaded right now. Try again in a moment "
+            "or start with -model to pick another."
+        ) from exc
 
 
 class Context:
@@ -168,10 +245,8 @@ def process_text(
     context: "Context | None" = None,
     briefing: "str | None" = None,
 ) -> Iterator[str]:
-    if not GROQ_API_KEY:
-        raise GroqNotConfiguredError("GROQ_API_KEY not set")
-
     client = _client()
+    max_tokens, reasoning = _limits(vision=False)
     messages: list[dict] = [{"role": "system", "content": PROMPT}]
 
     brief_msg = _briefing_message(briefing, question)
@@ -186,19 +261,17 @@ def process_text(
 
     yield from _stream_tokens(
         client,
-        model=GROQ_MODEL_TEXT,
+        model=providers.active().text_model,
         messages=messages,
-        max_tokens=GROQ_MAX_TOKENS,
-        reasoning_effort=GROQ_REASONING_TEXT,
+        max_tokens=max_tokens,
+        reasoning_effort=reasoning,
     )
 
 
 def process(path: Path, briefing: "str | None" = None) -> Iterator[str]:
-    if not GROQ_API_KEY:
-        raise GroqNotConfiguredError("GROQ_API_KEY not set")
-
-    image_b64 = base64.b64encode(path.read_bytes()).decode("utf-8")
     client = _client()
+    max_tokens, reasoning = _limits(vision=True)
+    image_b64 = base64.b64encode(path.read_bytes()).decode("utf-8")
 
     messages: list[dict] = []
 
@@ -221,8 +294,8 @@ def process(path: Path, briefing: "str | None" = None) -> Iterator[str]:
 
     yield from _stream_tokens(
         client,
-        model=GROQ_MODEL_VISION,
+        model=providers.active().vision_model,
         messages=messages,
-        max_tokens=GROQ_MAX_TOKENS,
-        reasoning_effort=GROQ_REASONING_VISION,
+        max_tokens=max_tokens,
+        reasoning_effort=reasoning,
     )

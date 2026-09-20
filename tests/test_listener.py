@@ -166,3 +166,18 @@ def test_start_capture_forwards_the_region(root):
         listener._start_capture()
 
     mock_capture.assert_called_once_with(region=(1280, 720))
+
+
+def test_stream_image_names_the_missing_gemini_key(root):
+    from phonexi.processor import GroqNotConfiguredError
+    listener = HotkeyListener(tk_root=root)
+    mock_win = MagicMock()
+
+    with patch("phonexi.listener.process",
+               side_effect=GroqNotConfiguredError("GEMINI_API_KEY")):
+        listener._stream_image(MagicMock(), mock_win)
+
+    root.update()
+    mock_win.show_error.assert_called_once_with(
+        "GEMINI_API_KEY not set — add it to .env"
+    )
