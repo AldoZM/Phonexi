@@ -393,3 +393,43 @@ def test_the_picker_says_cli_not_model():
          patch("main.choose", return_value=_cli_row("claude")) as picker:
         main._choose_cli()
     assert picker.call_args.kwargs["what"] == "CLI"
+
+
+def test_cli_mode_does_not_announce_api_models(capsys):
+    """They are never used: the engine answers and Whisper has its own key."""
+    with patch.object(sys, "argv", ["main.py", "-cli"]), \
+         patch("main.installed_clis", return_value=[_cli_row("agy")]), \
+         patch("main.choose", return_value=_cli_row("agy")), \
+         patch("main._run_popup"):
+        main.main()
+    out = capsys.readouterr().out
+    assert "Antigravity" in out
+    assert "openai/gpt-oss" not in out
+    assert "(captures)" not in out
+
+
+def test_cli_mode_skips_provider_selection():
+    with patch.object(sys, "argv", ["main.py", "-cli"]), \
+         patch("main.installed_clis", return_value=[_cli_row("agy")]), \
+         patch("main.choose", return_value=_cli_row("agy")), \
+         patch("main._choose_provider") as provider, \
+         patch("main._run_popup"):
+        main.main()
+    provider.assert_not_called()
+
+
+def test_without_cli_the_provider_is_still_chosen():
+    with patch.object(sys, "argv", ["main.py"]), \
+         patch("main._choose_provider") as provider, \
+         patch("main._run_popup"):
+        main.main()
+    provider.assert_called_once_with(False)
+
+
+def test_model_and_cli_together_is_refused(capsys):
+    """Silently ignoring one is exactly how the two-line confusion happened."""
+    with patch.object(sys, "argv", ["main.py", "-model", "-cli"]):
+        with pytest.raises(SystemExit) as exc:
+            main._parse_args()
+    assert exc.value.code == 2
+    assert "-model" in capsys.readouterr().err

@@ -97,6 +97,9 @@ def _parse_args() -> argparse.Namespace:
              "startup so answers come out oriented instead of cold.",
     )
     args = parser.parse_args()
+    if args.cli and args.model:
+        parser.error("-model picks an API model and -cli picks a local CLI; "
+                     "they answer the same question, so pass only one.")
     if args.region is not None:
         try:
             args.region = parse_region(args.region)
@@ -245,10 +248,13 @@ def _choose_provider(pick: bool) -> None:
 
 def main() -> None:
     args = _parse_args()
-    engine = _choose_cli() if args.cli else None
-    # The API models still back the voice flow's Whisper call, so the provider
-    # is resolved either way.
-    _choose_provider(args.model and not args.cli)
+    if args.cli:
+        # transcribe() builds its own Groq client with its own key, so the API
+        # model selection would never be read — announcing it only misleads.
+        engine = _choose_cli()
+    else:
+        engine = None
+        _choose_provider(args.model)
     briefing = _read_context(args.context)
     prune()
     if args.region:
