@@ -90,3 +90,23 @@ def test_refuses_without_a_terminal():
 def test_refuses_an_empty_list():
     with pytest.raises(PickerUnavailableError):
         choose([], read_key=lambda: "\r", out=io.StringIO(), is_tty=True)
+
+
+def test_the_header_names_what_is_being_chosen():
+    out = io.StringIO()
+    keys = iter(ENTER)
+    choose(MODELS, read_key=lambda: next(keys), out=out, is_tty=True, what="CLI")
+    assert "Choose a CLI" in out.getvalue()
+
+
+def test_the_header_still_says_model_by_default():
+    out = io.StringIO()
+    keys = iter(ENTER)
+    choose(MODELS, read_key=lambda: next(keys), out=out, is_tty=True)
+    assert "Choose a model" in out.getvalue()
+
+
+def test_the_no_console_error_names_the_flag_that_was_used():
+    with pytest.raises(PickerUnavailableError) as exc:
+        choose(MODELS, is_tty=False, what="CLI")
+    assert "-cli needs" in str(exc.value)

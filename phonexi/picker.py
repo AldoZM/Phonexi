@@ -58,7 +58,7 @@ def choose(
         is_tty = sys.stdin.isatty() and out.isatty()
     if not is_tty:
         raise PickerUnavailableError(
-            f"-{what} needs an interactive terminal; run Phonexi from a console."
+            f"-{what.lower()} needs an interactive terminal; run Phonexi from a console."
         )
     if not models:
         raise PickerUnavailableError(
@@ -70,7 +70,7 @@ def choose(
         _enable_ansi()
 
     cursor = min(max(start, 0), len(models) - 1)
-    out.write("Choose a model (Up/Down, Enter to confirm, Esc to cancel):\n")
+    out.write(f"Choose a {what} (Up/Down, Enter to confirm, Esc to cancel):\n")
     _draw(out, models, cursor, redraw=False)
     while True:
         key = read_key()
