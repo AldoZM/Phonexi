@@ -366,6 +366,6 @@ def test_agy_asks_for_the_configured_effort(wired):
     assert argv[argv.index("--effort") + 1] == AGY_EFFORT
 
 
-def test_agy_defaults_to_high_effort():
+def test_agy_defaults_to_medium_effort():
     from phonexi.config import AGY_EFFORT
-    assert AGY_EFFORT == "high"
+    assert AGY_EFFORT == "medium"

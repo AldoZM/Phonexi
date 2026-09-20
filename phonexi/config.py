@@ -45,9 +45,13 @@ GEMINI_MAX_TOKENS: int = int(os.getenv("GEMINI_MAX_TOKENS", "2048"))
 GEMINI_REASONING: str = os.getenv("GEMINI_REASONING", "low")
 
 # Reasoning budget for the agy CLI engine (low|medium|high). Measured on
-# 2026-09-20: high spends ~420 thinking tokens on a short question, low spends
-# zero. An interview answer is worth the thinking, so high is the default.
-AGY_EFFORT: str = os.getenv("AGY_EFFORT", "high")
+# 2026-09-20 on one interview question, timing the first word: low 2.9s,
+# medium 3.1s, high 52s. high thinks seventeen times longer without writing
+# more -- 3122 characters against low's 3926 -- and leaves the popup blank
+# while the interviewer waits. medium is the level that keeps the voice flow
+# usable. Raise it to high only to prepare before an interview, not to answer
+# during one.
+AGY_EFFORT: str = os.getenv("AGY_EFFORT", "medium")
 
 PROMPT = (
     "You are an expert software engineer. Solve the technical/coding problem shown in the "

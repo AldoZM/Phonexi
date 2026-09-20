@@ -104,20 +104,27 @@ same popup, same web mode. What changes is who answers.
 
 Two things to know before relying on it:
 
-- **It is slower.** Every question launches a process, so the first word takes
-  3 to 7 seconds against Groq's near-instant reply. Measured on 2026-09-20:
-  `claude` answers a capture in about 10 s (first text at ~5 s), `agy` in about
-  9 s (first text at ~7 s). A long answer from `claude` can reach 20 s.
+- **It is slower, and the voice flow shows it worst.** Every question launches
+  a process. Measured end to end on 2026-09-20 — from releasing the hotkey to
+  the first word on screen — the voice flow takes about 4 to 5 seconds with
+  `agy` at medium (1.2s of Whisper plus ~3s of CLI) and finishes in 6 to 7. The
+  same flow on the Groq API takes 1.8s and finishes in 2.4s. `claude` is
+  slower still: 14 to 23 seconds to the first word and up to 43 to finish.
 - **Audio still needs `GROQ_API_KEY`.** Neither CLI transcribes a `.wav`, so
   Whisper keeps doing that half of the voice flow. Only the answer comes from
   the CLI.
 
-`agy` runs on Gemini 3.8 Flash at **high** effort, set explicitly with
-`--effort` rather than left to whatever its own config holds. Measured on
-2026-09-20, high spends about 420 thinking tokens on a short question and low
-spends none, so the tier is worth pinning. Override it with `AGY_EFFORT` in
-`.env` (`low`, `medium` or `high`). Which model `agy` uses is its own setting;
-Phonexi does not pin it, so a retired model cannot break the flag.
+`agy` runs on Gemini 3.8 Flash at **medium** effort, set explicitly with
+`--effort` rather than left to whatever its own config holds. The level is the
+single biggest lever on how fast an answer starts. Timing the first word on one
+interview question, 2026-09-20: low 2.9s, medium 3.1s, high **52s**. high does
+not write more for that wait — 3122 characters against low's 3926 — it just
+thinks longer, and the popup stays blank while the interviewer waits. Override
+with `AGY_EFFORT` in `.env`, and raise it to `high` only to prepare before an
+interview, never to answer during one.
+
+Which model `agy` uses is its own setting; Phonexi does not pin it, so a
+retired model cannot break the flag.
 
 These are coding agents, not chat endpoints, so both are kept on a short leash:
 `claude` runs with `--allowed-tools Read` in capture mode and no tools at all in
