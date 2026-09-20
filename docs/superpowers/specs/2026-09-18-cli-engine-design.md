@@ -1,8 +1,10 @@
 # Phonexi — Motor CLI local (`--engine`)
 
-> **Estado: idea, pendiente de spike.** El diseño está planteado pero tres
-> decisiones dependen de mediciones que todavía no se hacen (ver *Preguntas
-> abiertas*). Nada implementado. Escrito el 18 de septiembre de 2026.
+> **Estado: medido el 20 de septiembre de 2026, en implementación.** El spike
+> corrió en la máquina Windows con `claude` 2.1.278 y `agy` 1.2.7 y contestó las
+> cuatro preguntas abiertas. Tres supuestos del diseño original salieron falsos y
+> están corregidos abajo, marcados como **corregido por el spike**.
+> Escrito el 18 de septiembre de 2026.
 
 ## Problema
 
@@ -38,8 +40,11 @@ en `show_and_collect()`. Cualquier motor que sepa ceder tokens encaja sin que
 
 ## Alcance
 
-- Flag `--engine groq|claude|agy`, con `groq` de default. Combina con `-P`,
-  `-w` y `-c` como las demás.
+- Flag `-cli`, sin valor, que abre el picker de flechas con los CLIs instalados
+  — el mismo `choose()` de `picker.py` que ya sirve a `-model`. Sin el flag,
+  Phonexi usa la API como hoy. Combina con `-P`, `-w` y `-c` como las demás.
+  **Corregido por el spike:** el diseño original proponía
+  `--engine groq|claude|agy`, que competía con el `-model` que ya existe.
 - Capa `phonexi/engines/`, simétrica a la capa `backends/` de la rama
   `linux-port`.
 - El motor CLI se amarra para que no actúe como agente: sin herramientas más
@@ -55,11 +60,18 @@ desde la página web, historial persistente de conversación.
 
 ```
 phonexi/engines/
-├── base.py       # Protocol Engine
-├── __init__.py   # get_engine("groq" | "claude" | "agy")
-├── groq.py       # el código actual de processor.py, movido tal cual
-└── cli.py        # maneja el subproceso (claude o agy)
+├── base.py       # Protocol Engine, CliEngine, errores neutrales
+├── __init__.py   # get_engine(name), installed()
+├── api.py        # adapta processor.py (Groq/Gemini) a la interfaz Engine
+├── claude.py     # banderas y parser de Claude Code
+└── agy.py        # banderas y parser de Antigravity
 ```
+
+**Corregido por el spike:** el diseño original tenía un solo `cli.py` porque
+suponía que los dos CLIs hablaban el mismo NDJSON. No lo hacen (ver *Formas de
+salida*), así que cada uno trae su parser. Y `processor.py` no se mueve: se
+queda donde está y `api.py` lo envuelve. Moverlo obligaría a reescribir las 808
+líneas de `tests/test_processor.py` sin ganar nada.
 
 ### Interfaz
 
@@ -85,27 +97,55 @@ Levanta el subproceso en modo no interactivo y lee NDJSON línea por línea,
 cediendo cada delta de texto conforme llega:
 
 ```
-Popen([cli, "-p", prompt, "--output-format", "stream-json"], stdout=PIPE)
-  → por cada línea: json.loads → si trae delta de texto → yield
+Popen(argv, stdout=PIPE, stdin=DEVNULL)
+  → por cada línea: json.loads → extract() del motor → si hay texto → yield
 ```
+
+Tres detalles que el spike obligó a fijar y que no son opcionales:
+
+- **`shutil.which()` para resolver el binario.** En Windows `claude` es un
+  `.CMD` de npm, no un `.exe`: `Popen(["claude", ...])` muere con `WinError 2`.
+  `agy` sí es `.exe`, pero se resuelve igual por simetría.
+- **`stdin=DEVNULL`.** `claude` espera datos por stdin y se rinde a los 3
+  segundos con un warning. Cerrarle stdin bajó el primer token de 7.78 s a
+  4.89 s en el modo captura.
+- **`--include-partial-messages` en `claude`.** Ver *Formas de salida*.
+
+### Formas de salida
+
+**Corregido por el spike.** Cada CLI emite un NDJSON distinto, así que no hay
+un lector común:
+
+- `claude` → `{"type":"stream_event","event":{"type":"content_block_delta",
+  "delta":{"text":"..."}}}`, y **solo si se pasa `--include-partial-messages`**.
+  Sin esa bandera, `--output-format stream-json` entrega la respuesta completa
+  en un único evento `assistant` al final: 1 bloque a los 6.6 s en vez de 292
+  deltas con hueco máximo de 0.26 s. La bandera no aparecía en el diseño
+  original ni en su lista de banderas verificadas.
+- `agy` → `{"event":"step_update","step_update":{"step_type":"agent_response",
+  "text_delta":"..."}}`. No tiene equivalente de `--include-partial-messages`:
+  entrega los deltas en ráfaga (0.20 s de dispersión en texto, 1.43 s en
+  captura). Como el total es corto, se nota menos.
 
 ### Mapeo de lo que ya existe
 
 | Pieza actual | En el motor CLI |
 |---|---|
-| `PROMPT` y briefing `-c` | `claude`: `--system-prompt` / `--append-system-prompt`. `agy`: **sin bandera equivalente**, habría que anteponerlos al prompt |
+| `PROMPT` y briefing `-c` | `claude`: `--system-prompt`, verificado. `agy`: **sin bandera equivalente**, se anteponen al prompt |
 | Screenshot | A Groq se le manda el PNG en base64; al agente se le pasa **la ruta** y él la lee con su herramienta — un viaje extra |
 | Follow-ups (`Context`) | Los CLIs traen `--continue` nativo, pero se mantiene `Context` para que ambos motores se comporten igual y el motor siga siendo stateless |
-| Transcripción Whisper | Sin resolver — ver *Preguntas abiertas* |
+| Transcripción Whisper | Se queda en Groq: ninguno de los dos CLIs procesa audio |
 
-### Banderas verificadas (18 de septiembre de 2026)
+### Banderas verificadas (18 de septiembre, ampliado el 20)
 
-- `claude` 2.1.277 — `-p/--print`, `--output-format stream-json`, `--model`,
+- `claude` 2.1.278 — `-p/--print`, `--output-format stream-json`,
+  `--include-partial-messages` (**la que faltaba**), `--verbose`, `--model`,
   `--system-prompt`, `--append-system-prompt`, `--allowed-tools`,
   `--disallowed-tools`, `--continue`, `--resume`.
-- `agy` (binario Go) — `-p/--print`, `--output-format`, `--model`,
+- `agy` 1.2.7 — `-p/--print`, `--output-format`, `--model`, `--effort`,
   `--json-schema`, `--continue`, `--conversation`, `--mode`, `--sandbox`,
-  `--agent`. **No se le vio bandera de system prompt.**
+  `--agent`, `--dangerously-skip-permissions`. **Sin bandera de system prompt y
+  sin bandera para restringir herramientas**, confirmado en su `--help`.
 
 ## Riesgos
 
@@ -130,16 +170,53 @@ El flujo de voz hace **dos** llamadas a Groq, no una: Whisper transcribe y
 luego el LLM responde. Si ningún CLI acepta un `.wav`, Whisper se queda aunque
 la respuesta la dé el CLI. Eso sigue siendo útil, pero no es reemplazo total.
 
-## Preguntas abiertas (se resuelven con el spike)
+## Resultados del spike (20 de septiembre de 2026)
 
-1. **¿El streaming es incremental de verdad?** Si `--output-format stream-json`
-   suelta todo al final en vez de ir entregando, `Iterator[str]` sigue
-   funcionando pero se pierde la sensación de respuesta viva.
-2. **¿La imagen sale a un costo tolerable?** Si no, el modo screenshot se queda
-   en Groq y solo el de voz gana la opción CLI.
-3. **¿Alguno transcribe `.wav`?** Decide si Whisper se queda o no.
-4. **¿Están `claude` y `agy` en la máquina Windows?** Phonexi corre en Windows;
-   el diseño se está explorando en una Mac.
+1. **¿El streaming es incremental de verdad?** En `claude`, sí, pero solo con
+   `--include-partial-messages`. Sin ella llega todo al final. En `agy` los
+   deltas salen en ráfaga, no token por token.
+2. **¿La imagen sale a un costo tolerable?** Sí. Los dos leyeron un PNG de
+   1600x900 con una pregunta de entrevista y contestaron correctamente.
+   `claude` gasta un tool call de `Read`; `agy` gasta dos pasos de herramienta.
+   El modo captura funciona con ambos motores.
+3. **¿Alguno transcribe `.wav`?** No. `claude` lo dice de frente. `agy` no
+   transcribe pero tampoco se rinde: se fue a investigar el archivo con 38
+   llamadas a herramientas durante 49 segundos para acabar reportando que no
+   había voz. **Whisper de Groq se queda**, y el modo voz sigue necesitando
+   `GROQ_API_KEY`.
+4. **¿Están `claude` y `agy` en la máquina Windows?** Sí, los dos.
+   `claude` 2.1.278 en `AppData\Roaming\npm\claude.CMD`,
+   `agy` 1.2.7 en `AppData\Local\agy\bin\agy.exe`.
+
+### Latencia medida
+
+Segundos hasta el primer texto visible y hasta terminar:
+
+- `claude`, captura, respuesta corta — 4.9 s / 9.7 s
+- `claude`, captura, respuesta larga — 5.1 s / 21.6 s
+- `agy`, captura — 6.9 s / 8.9 s
+- `claude`, texto suelto — 3.0 s / 15.6 s
+- `agy`, texto suelto — 3.8 s / 4.6 s
+
+`agy` termina antes; `claude` empieza a escribir antes y fluye más parejo.
+Ninguno se acerca a Groq, que contesta casi al instante: son 3 a 7 segundos
+fijos de arranque de proceso por pregunta. Es el precio de usar los modelos de
+paga, y hay que asumirlo a sabiendas.
+
+### El riesgo de agente, confirmado
+
+El episodio de los 49 segundos con el `.wav` es la prueba de que la sección
+*Riesgos* no era teórica. Y el reparto de correas es desigual:
+
+- `claude` tiene `--allowed-tools` y `--disallowed-tools`. Verificado: con
+  `--allowed-tools ""` no tocó nada, con `--allowed-tools Read` solo leyó la
+  imagen. Queda bien amarrado.
+- `agy` **no tiene ninguna bandera para restringir herramientas**. Su `--help`
+  solo ofrece `--sandbox` y `--mode`. Es una correa más floja, y eso va dicho
+  en el README en vez de escondido.
+
+`claude --system-prompt` sí se respeta (verificado con un token centinela).
+`agy` no tiene equivalente, así que el `PROMPT` se antepone al texto.
 
 ## Qué NO cambia
 

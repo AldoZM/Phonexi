@@ -6,6 +6,8 @@ import tkinter as tk
 
 from phonexi.briefing import ALLOWED_SUFFIXES, BriefingError
 from phonexi.briefing import load as load_briefing
+from phonexi.engines import get_engine
+from phonexi.engines import installed as installed_clis
 from phonexi.listener import HotkeyListener
 from phonexi.picker import PickerUnavailableError, choose
 from phonexi.providers import (
@@ -20,6 +22,7 @@ from phonexi.screenshot import DEFAULT_REGION, parse_region, prune
 EPILOG = """Examples:
   python main.py                      popup on the secondary monitor
   python main.py -model               pick the model with the arrow keys first
+  python main.py -cli                 answer with a local CLI (Claude Code / Antigravity)
   python main.py -c contexts/me.md    answer with a prior-context file
   python main.py -r 1600x900 -P       capture a box around the cursor, popup on primary
   python main.py -w                   read answers on your phone instead
@@ -33,7 +36,8 @@ Settings in .env:
   GROQ_MODEL_TEXT, GROQ_MODEL_VISION, GEMINI_MODEL   default models
   GROQ_MAX_TOKENS, GEMINI_MAX_TOKENS                 answer length cap
   GROQ_REASONING_TEXT, GROQ_REASONING_VISION, GEMINI_REASONING   thinking budget
-  Audio is always transcribed by Groq Whisper, so it needs GROQ_API_KEY.
+  Audio is always transcribed by Groq Whisper, so it needs GROQ_API_KEY --
+  that holds with -cli too, since neither CLI processes audio.
 """
 
 
@@ -56,6 +60,13 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Choose the model with the arrow keys before starting. Without it "
              "the provider whose key is written highest in .env is used.",
+    )
+    parser.add_argument(
+        "-cli", "--cli",
+        action="store_true",
+        help="Answer with a local CLI instead of the API, using the subscription "
+             "already paid for. Opens the same arrow-key picker as -model, "
+             "listing the CLIs installed on this machine.",
     )
     parser.add_argument(
         "-P", "--primary",
@@ -120,7 +131,33 @@ def _read_context(path: "str | None") -> "str | None":
     return text
 
 
-def _run_web(briefing: "str | None" = None, region: "tuple | None" = None) -> None:
+def _choose_cli():
+    """Pick the local CLI that answers, with the same picker -model uses.
+
+    Only what shutil.which() finds is listed, and the choice is made before any
+    hotkey is registered: a missing CLI must fail at startup, not mid-interview.
+    """
+    found = installed_clis()
+    if not found:
+        print("[Phonexi] -cli found no CLI installed. Install Claude Code "
+              "(npm i -g @anthropic-ai/claude-code) or Antigravity, or drop the flag.")
+        raise SystemExit(1)
+    try:
+        chosen = choose(found)
+    except PickerUnavailableError:
+        print("[Phonexi] -cli needs an interactive terminal; run Phonexi from a console.")
+        raise SystemExit(1)
+    if chosen is None:
+        print("[Phonexi] Cancelled.")
+        raise SystemExit(0)
+    engine = get_engine(chosen.name)
+    print(f"[Phonexi] Using {engine.LABEL} ({chosen.name}). "
+          "Audio still goes through Groq Whisper.")
+    return engine
+
+
+def _run_web(briefing: "str | None" = None, region: "tuple | None" = None,
+             engine=None) -> None:
     from phonexi.webserver import WebServer, WebView, lan_ip
 
     server = WebServer()
@@ -141,6 +178,7 @@ def _run_web(briefing: "str | None" = None, region: "tuple | None" = None) -> No
         view_factory=lambda: WebView(server),
         briefing=briefing,
         region=region,
+        engine=engine,
     )
     t = threading.Thread(target=listener.start, daemon=True)
     t.start()
@@ -154,7 +192,7 @@ def _run_web(briefing: "str | None" = None, region: "tuple | None" = None) -> No
 
 
 def _run_popup(use_primary: bool, briefing: "str | None" = None,
-               region: "tuple | None" = None) -> None:
+               region: "tuple | None" = None, engine=None) -> None:
     root = tk.Tk()
     root.withdraw()
 
@@ -163,6 +201,7 @@ def _run_popup(use_primary: bool, briefing: "str | None" = None,
         use_primary=use_primary,
         briefing=briefing,
         region=region,
+        engine=engine,
     )
     t = threading.Thread(target=listener.start, daemon=True)
     t.start()
@@ -206,15 +245,18 @@ def _choose_provider(pick: bool) -> None:
 
 def main() -> None:
     args = _parse_args()
-    _choose_provider(args.model)
+    engine = _choose_cli() if args.cli else None
+    # The API models still back the voice flow's Whisper call, so the provider
+    # is resolved either way.
+    _choose_provider(args.model and not args.cli)
     briefing = _read_context(args.context)
     prune()
     if args.region:
         print(f"[Phonexi] Region mode: {args.region[0]}x{args.region[1]} around the cursor.")
     if args.web:
-        _run_web(briefing, args.region)
+        _run_web(briefing, args.region, engine)
     else:
-        _run_popup(args.primary, briefing, args.region)
+        _run_popup(args.primary, briefing, args.region, engine)
 
 
 if __name__ == "__main__":

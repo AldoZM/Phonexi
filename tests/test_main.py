@@ -280,3 +280,108 @@ def test_main_model_flag_starts_on_the_current_default():
     start = mock_choose.call_args.kwargs["start"]
     assert models[start].provider == "groq"
 
+
+# ── -cli: pick a local CLI engine with the -model picker ────────────────────
+
+def _cli_row(name):
+    from phonexi.engines import CLI
+    from phonexi.providers import Model
+    return Model(CLI, name, vision=True, audio=False)
+
+
+def test_parse_args_cli_flag():
+    with patch.object(sys, "argv", ["main.py", "-cli"]):
+        assert main._parse_args().cli is True
+
+
+def test_cli_flag_is_not_swallowed_by_the_context_flag():
+    """-c takes a value, so -cli must not be read as -c with "li"."""
+    with patch.object(sys, "argv", ["main.py", "-cli", "-c", "notes.md"]):
+        args = main._parse_args()
+    assert args.cli is True
+    assert args.context == "notes.md"
+
+
+def test_cli_defaults_to_off():
+    with patch.object(sys, "argv", ["main.py"]):
+        assert main._parse_args().cli is False
+
+
+def test_choose_cli_returns_the_picked_engine():
+    from phonexi.engines.agy import AgyEngine
+    with patch("main.installed_clis", return_value=[_cli_row("claude"), _cli_row("agy")]), \
+         patch("main.choose", return_value=_cli_row("agy")):
+        assert isinstance(main._choose_cli(), AgyEngine)
+
+
+def test_choose_cli_only_offers_installed_clis():
+    with patch("main.installed_clis", return_value=[_cli_row("agy")]) as found, \
+         patch("main.choose", return_value=_cli_row("agy")) as picker:
+        main._choose_cli()
+    found.assert_called_once_with()
+    assert [m.name for m in picker.call_args.args[0]] == ["agy"]
+
+
+def test_choose_cli_exits_when_nothing_is_installed(capsys):
+    """A missing CLI must stop startup, not surface mid-interview."""
+    with patch("main.installed_clis", return_value=[]):
+        with pytest.raises(SystemExit) as exc:
+            main._choose_cli()
+    assert exc.value.code == 1
+    assert "no CLI installed" in capsys.readouterr().out
+
+
+def test_choose_cli_exits_cleanly_when_cancelled():
+    with patch("main.installed_clis", return_value=[_cli_row("claude")]), \
+         patch("main.choose", return_value=None):
+        with pytest.raises(SystemExit) as exc:
+            main._choose_cli()
+    assert exc.value.code == 0
+
+
+def test_choose_cli_needs_a_console(capsys):
+    from phonexi.picker import PickerUnavailableError
+    with patch("main.installed_clis", return_value=[_cli_row("claude")]), \
+         patch("main.choose", side_effect=PickerUnavailableError("no tty")):
+        with pytest.raises(SystemExit) as exc:
+            main._choose_cli()
+    assert exc.value.code == 1
+    assert "interactive terminal" in capsys.readouterr().out
+
+
+def test_choose_cli_says_audio_still_goes_through_whisper(capsys):
+    with patch("main.installed_clis", return_value=[_cli_row("claude")]), \
+         patch("main.choose", return_value=_cli_row("claude")):
+        main._choose_cli()
+    assert "Whisper" in capsys.readouterr().out
+
+
+def test_main_hands_the_engine_to_the_popup():
+    from phonexi.engines.claude import ClaudeEngine
+    with patch.object(sys, "argv", ["main.py", "-cli"]), \
+         patch("main.installed_clis", return_value=[_cli_row("claude")]), \
+         patch("main.choose", return_value=_cli_row("claude")), \
+         patch("main._choose_provider"), \
+         patch("main._run_popup") as run:
+        main.main()
+    assert isinstance(run.call_args.args[3], ClaudeEngine)
+
+
+def test_main_hands_the_engine_to_the_web_mode():
+    from phonexi.engines.claude import ClaudeEngine
+    with patch.object(sys, "argv", ["main.py", "-cli", "-w"]), \
+         patch("main.installed_clis", return_value=[_cli_row("claude")]), \
+         patch("main.choose", return_value=_cli_row("claude")), \
+         patch("main._choose_provider"), \
+         patch("main._run_web") as run:
+        main.main()
+    assert isinstance(run.call_args.args[2], ClaudeEngine)
+
+
+def test_without_the_flag_no_engine_is_injected():
+    """No -cli means the listener falls back to the API engine, as always."""
+    with patch.object(sys, "argv", ["main.py"]), \
+         patch("main._choose_provider"), \
+         patch("main._run_popup") as run:
+        main.main()
+    assert run.call_args.args[3] is None

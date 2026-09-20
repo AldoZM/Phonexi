@@ -86,6 +86,39 @@ Choose a model (Up/Down, Enter to confirm, Esc to cancel):
 
 Gemini's free tier answers 503 when a model is busy. Phonexi then retries once on another Gemini model (3.8-flash first) and the popup opens with a line saying which one answered; only if that one is busy too does the popup show the error. A model that reads images answers both hotkeys; a text-only one answers audio and leaves captures on the `.env` vision model. `-model` needs a console, so it does not work from `start_phonexi.vbs`.
 
+Answer with a local CLI instead of the API, using a subscription already paid for:
+
+```bash
+python main.py -cli
+```
+
+```
+Choose a CLI (Up/Down, Enter to confirm, Esc to cancel):
+> cli     claude  text, vision
+  cli     agy     text, vision
+```
+
+Only CLIs found on `PATH` are listed, and a missing one stops startup rather than
+surfacing mid-interview. Everything else is unchanged: same hotkeys, same capture,
+same popup, same web mode. What changes is who answers.
+
+Two things to know before relying on it:
+
+- **It is slower.** Every question launches a process, so the first word takes
+  3 to 7 seconds against Groq's near-instant reply. Measured on 2026-09-20:
+  `claude` answers a capture in about 10 s (first text at ~5 s), `agy` in about
+  9 s (first text at ~7 s). A long answer from `claude` can reach 20 s.
+- **Audio still needs `GROQ_API_KEY`.** Neither CLI transcribes a `.wav`, so
+  Whisper keeps doing that half of the voice flow. Only the answer comes from
+  the CLI.
+
+These are coding agents, not chat endpoints, so both are kept on a short leash:
+`claude` runs with `--allowed-tools Read` in capture mode and no tools at all in
+voice mode. `agy` has **no flag to restrict tools**, only `--sandbox`, which is a
+weaker guarantee — worth knowing before picking it for a live interview.
+
+Like `-model`, `-cli` needs a console, so it does not work from `start_phonexi.vbs`.
+
 Capture a box around the cursor instead of the whole monitor:
 
 ```bash
@@ -157,12 +190,17 @@ Phonexi/
 │   ├── screenshot.py     # Per-monitor screenshot capture
 │   ├── processor.py      # Vision + text LLM streaming (Groq or Gemini)
 │   ├── providers.py      # Model catalog, key order, active selection
-│   ├── picker.py         # Arrow-key model picker for -model
+│   ├── picker.py         # Arrow-key picker, shared by -model and -cli
+│   ├── engines/          # Who answers: the API, or a local CLI (-cli)
+│   │   ├── base.py       # Engine protocol + shared subprocess/NDJSON machinery
+│   │   ├── api.py        # Adapts processor.py (Groq/Gemini) to the interface
+│   │   ├── claude.py     # Claude Code: flags and stream_event parser
+│   │   └── agy.py        # Antigravity: flags and step_update parser
 │   ├── audio.py          # WASAPI loopback capture + Whisper transcription
 │   ├── listener.py       # Hotkey detection + orchestration (view-agnostic via view_factory)
 │   ├── ui.py             # Dark draggable popup with syntax highlighting
 │   └── webserver.py      # Web mode: local HTTP + SSE, QR, phone-readable page
-├── tests/                # pytest suite (217 tests)
+├── tests/                # pytest suite (270 tests)
 ├── requirements.txt
 ├── .env                  # NOT committed — add your key here
 └── context.txt           # Full project context for AI assistants

@@ -33,17 +33,29 @@ def test_start_capture_calls_capture_and_creates_window(root):
         mock_window_cls.assert_called_once_with(root, use_primary=False)
 
 
+def _drain(win):
+    """Make an existing MagicMock window consume the stream it is handed."""
+    win.show_and_collect.side_effect = lambda stream: "".join(stream)
+    return win
+
+
+def _consuming_window():
+    """A view that drains the stream, like ResultWindow and WebView do."""
+    win = MagicMock()
+    win.show_and_collect.side_effect = lambda stream: "".join(stream)
+    return win
+
+
 def test_stream_image_calls_process_and_show(root):
     listener = HotkeyListener(tk_root=root)
     fake_path = MagicMock()
-    fake_tokens = iter(["hello"])
-    mock_win = MagicMock()
+    mock_win = _consuming_window()
 
-    with patch("phonexi.listener.process", return_value=fake_tokens) as mock_process:
+    with patch("phonexi.engines.api.process", return_value=iter(["hello"])) as mock_process:
         listener._stream_image(fake_path, mock_win)
 
     mock_process.assert_called_once_with(fake_path, briefing=None)
-    mock_win.show_and_collect.assert_called_once_with(fake_tokens)
+    mock_win.show_and_collect.assert_called_once()
 
 
 def test_stream_image_handles_groq_not_configured(root):
@@ -51,8 +63,8 @@ def test_stream_image_handles_groq_not_configured(root):
     listener = HotkeyListener(tk_root=root)
     mock_win = MagicMock()
 
-    with patch("phonexi.listener.process", side_effect=GroqNotConfiguredError()):
-        listener._stream_image(MagicMock(), mock_win)
+    with patch("phonexi.engines.api.process", side_effect=GroqNotConfiguredError()):
+        listener._stream_image(MagicMock(), _drain(mock_win))
 
     root.update()
     mock_win.show_error.assert_called_once_with(
@@ -64,8 +76,8 @@ def test_stream_image_handles_generic_error(root):
     listener = HotkeyListener(tk_root=root)
     mock_win = MagicMock()
 
-    with patch("phonexi.listener.process", side_effect=RuntimeError("network fail")):
-        listener._stream_image(MagicMock(), mock_win)
+    with patch("phonexi.engines.api.process", side_effect=RuntimeError("network fail")):
+        listener._stream_image(MagicMock(), _drain(mock_win))
 
     root.update()
     mock_win.show_error.assert_called_once_with("Error: network fail")
@@ -125,20 +137,20 @@ def test_listener_stores_briefing(root):
 def test_stream_image_forwards_briefing_to_process(root):
     listener = HotkeyListener(tk_root=root, briefing="Vacante Kafka.")
 
-    with patch("phonexi.listener.process", return_value=iter([])) as mock_process:
-        listener._stream_image(MagicMock(), MagicMock())
+    with patch("phonexi.engines.api.process", return_value=iter([])) as mock_process:
+        listener._stream_image(MagicMock(), _consuming_window())
 
     assert mock_process.call_args.kwargs["briefing"] == "Vacante Kafka."
 
 
 def test_record_worker_forwards_briefing_to_process_text(root):
     listener = HotkeyListener(tk_root=root, briefing="Vacante Kafka.")
-    win = MagicMock()
+    win = _consuming_window()
     listener._current_window = win
 
     with patch("phonexi.listener.record", return_value=b"wav"), \
          patch("phonexi.listener.transcribe", return_value="¿Qué es un broker?"), \
-         patch("phonexi.listener.process_text", return_value=iter([])) as mock_text:
+         patch("phonexi.engines.api.process_text", return_value=iter([])) as mock_text:
         listener._record_worker(MagicMock())
 
     assert mock_text.call_args.kwargs["briefing"] == "Vacante Kafka."
@@ -173,9 +185,9 @@ def test_stream_image_names_the_missing_gemini_key(root):
     listener = HotkeyListener(tk_root=root)
     mock_win = MagicMock()
 
-    with patch("phonexi.listener.process",
+    with patch("phonexi.engines.api.process",
                side_effect=GroqNotConfiguredError("GEMINI_API_KEY")):
-        listener._stream_image(MagicMock(), mock_win)
+        listener._stream_image(MagicMock(), _drain(mock_win))
 
     root.update()
     mock_win.show_error.assert_called_once_with(

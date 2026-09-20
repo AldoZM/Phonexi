@@ -2,7 +2,8 @@ import threading
 from pynput import keyboard
 
 from phonexi.audio import record, transcribe
-from phonexi.processor import Context, GroqAPIError, GroqNotConfiguredError, process, process_text
+from phonexi.engines import ApiEngine, EngineError, EngineNotConfiguredError
+from phonexi.processor import Context, GroqNotConfiguredError
 from phonexi.screenshot import capture
 from phonexi.ui import ResultWindow
 
@@ -19,11 +20,14 @@ class HotkeyListener:
         view_factory=None,
         briefing: "str | None" = None,
         region: "tuple | None" = None,
+        engine=None,
     ) -> None:
         self._tk_root = tk_root
         self._use_primary = use_primary
         self._briefing = briefing
         self._region = region
+        # Whoever answers. Without -cli that is the Groq/Gemini API, as always.
+        self._engine = engine or ApiEngine()
         self._view_factory = view_factory or (
             lambda: ResultWindow(self._tk_root, use_primary=self._use_primary)
         )
@@ -99,15 +103,15 @@ class HotkeyListener:
 
     def _stream_image(self, path, win) -> None:
         try:
-            response = win.show_and_collect(process(path, briefing=self._briefing))
+            response = win.show_and_collect(
+                self._engine.answer_image(path, briefing=self._briefing)
+            )
             if response:
                 self._context = Context(
                     user_turn="[Screenshot of interview question]",
                     assistant_turn=response,
                 )
-        except GroqNotConfiguredError as exc:
-            self._schedule(win.show_error, f"{exc.key_name} not set — add it to .env")
-        except GroqAPIError as exc:
+        except (EngineNotConfiguredError, EngineError) as exc:
             self._schedule(win.show_error, str(exc))
         except Exception as exc:
             self._schedule(win.show_error, f"Error: {exc}")
@@ -173,13 +177,13 @@ class HotkeyListener:
             self._schedule(win.show_status, f"❓ {text}\n")
         try:
             response = win.show_and_collect(
-                process_text(text, context=self._context, briefing=self._briefing)
+                self._engine.answer_text(
+                    text, context=self._context, briefing=self._briefing
+                )
             )
             if response:
                 self._context = Context(user_turn=text, assistant_turn=response)
-        except GroqNotConfiguredError as exc:
-            self._schedule(win.show_error, f"{exc.key_name} not set — add it to .env")
-        except GroqAPIError as exc:
+        except (EngineNotConfiguredError, EngineError) as exc:
             self._schedule(win.show_error, str(exc))
         except Exception as exc:
             self._schedule(win.show_error, f"Error: {exc}")
