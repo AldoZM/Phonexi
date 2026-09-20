@@ -230,17 +230,32 @@ class ResultWindow:
         done.wait()
         return result[0] if result else ""
 
+    def _clear(self) -> bool:
+        """Empty the widget. False when the popup is already gone.
+
+        The answer can land long after the window closed — a CLI engine takes
+        9 to 30 seconds, so Escape or a second capture lands mid-stream often.
+        """
+        try:
+            self._text.configure(state=tk.NORMAL)
+            self._text.delete("1.0", tk.END)
+            self._text.configure(state=tk.DISABLED)
+            return True
+        except tk.TclError:
+            return False
+
     def _do_render(self, text: str) -> None:
-        self._text.configure(state=tk.NORMAL)
-        self._text.delete("1.0", tk.END)
-        self._text.configure(state=tk.DISABLED)
+        if not self._clear():
+            return
         self._render_markdown(text)
-        self._text.see("1.0")
+        try:
+            self._text.see("1.0")
+        except tk.TclError:
+            pass
 
     def show_status(self, msg: str) -> None:
-        self._text.configure(state=tk.NORMAL)
-        self._text.delete("1.0", tk.END)
-        self._text.configure(state=tk.DISABLED)
+        if not self._clear():
+            return
         self._ins(f"> {msg}\n", "status")
 
     def show_error(self, msg: str) -> None:

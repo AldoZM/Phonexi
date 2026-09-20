@@ -355,3 +355,17 @@ def test_image_mode_tells_the_agent_not_to_narrate(wired, tmp_path):
     list(ClaudeEngine().answer_image(shot))
     sent = record["argv"][record["argv"].index("-p") + 1]
     assert "do not narrate" in sent
+
+
+def test_agy_asks_for_the_configured_effort(wired):
+    """Without it agy takes whatever tier its own config happens to hold."""
+    from phonexi.config import AGY_EFFORT
+    record = wired(agy_lines("hi"))
+    list(AgyEngine().answer_text("why?"))
+    argv = record["argv"]
+    assert argv[argv.index("--effort") + 1] == AGY_EFFORT
+
+
+def test_agy_defaults_to_high_effort():
+    from phonexi.config import AGY_EFFORT
+    assert AGY_EFFORT == "high"

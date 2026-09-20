@@ -7,6 +7,7 @@ to restrict tools at all — --sandbox is the only leash it offers.
 
 from pathlib import Path
 
+from phonexi.config import AGY_EFFORT
 from phonexi.engines.base import CliEngine, system_prompt
 
 
@@ -19,6 +20,7 @@ class AgyEngine(CliEngine):
             exe,
             "-p", f"{system_prompt()}\n\n{prompt}",
             "--output-format", "stream-json",
+            "--effort", AGY_EFFORT,
             "--sandbox",
         ]
 

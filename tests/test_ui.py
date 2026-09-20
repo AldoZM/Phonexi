@@ -86,3 +86,25 @@ def test_result_window_close_destroys(root):
     win = ResultWindow(root)
     win.close()
     assert not win._win.winfo_exists()
+
+
+# ── a closed popup must not crash the callback that arrives late ────────────
+# A CLI engine answers in 9-30s, so Escape (or a second capture) lands in that
+# window far more often than it did with Groq's near-instant reply.
+
+def test_render_after_close_does_not_raise(root):
+    win = ResultWindow(root)
+    win._win.destroy()
+    win._do_render("# Answer\n\nsome text")
+
+
+def test_status_after_close_does_not_raise(root):
+    win = ResultWindow(root)
+    win._win.destroy()
+    win.show_status("Listening...")
+
+
+def test_error_after_close_does_not_raise(root):
+    win = ResultWindow(root)
+    win._win.destroy()
+    win.show_error("Antigravity (agy): something broke")

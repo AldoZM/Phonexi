@@ -112,6 +112,13 @@ Two things to know before relying on it:
   Whisper keeps doing that half of the voice flow. Only the answer comes from
   the CLI.
 
+`agy` runs on Gemini 3.8 Flash at **high** effort, set explicitly with
+`--effort` rather than left to whatever its own config holds. Measured on
+2026-09-20, high spends about 420 thinking tokens on a short question and low
+spends none, so the tier is worth pinning. Override it with `AGY_EFFORT` in
+`.env` (`low`, `medium` or `high`). Which model `agy` uses is its own setting;
+Phonexi does not pin it, so a retired model cannot break the flag.
+
 These are coding agents, not chat endpoints, so both are kept on a short leash:
 `claude` runs with `--allowed-tools Read` in capture mode and no tools at all in
 voice mode. `agy` has **no flag to restrict tools**, only `--sandbox`, which is a

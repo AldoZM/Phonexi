@@ -36,6 +36,7 @@ Settings in .env:
   GROQ_MODEL_TEXT, GROQ_MODEL_VISION, GEMINI_MODEL   default models
   GROQ_MAX_TOKENS, GEMINI_MAX_TOKENS                 answer length cap
   GROQ_REASONING_TEXT, GROQ_REASONING_VISION, GEMINI_REASONING   thinking budget
+  AGY_EFFORT                     reasoning budget for -cli agy (default high)
   Audio is always transcribed by Groq Whisper, so it needs GROQ_API_KEY --
   that holds with -cli too, since neither CLI processes audio.
 """

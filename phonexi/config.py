@@ -44,6 +44,11 @@ GEMINI_MAX_TOKENS: int = int(os.getenv("GEMINI_MAX_TOKENS", "2048"))
 # Gemini spells the levels minimal/low/medium/high.
 GEMINI_REASONING: str = os.getenv("GEMINI_REASONING", "low")
 
+# Reasoning budget for the agy CLI engine (low|medium|high). Measured on
+# 2026-09-20: high spends ~420 thinking tokens on a short question, low spends
+# zero. An interview answer is worth the thinking, so high is the default.
+AGY_EFFORT: str = os.getenv("AGY_EFFORT", "high")
+
 PROMPT = (
     "You are an expert software engineer. Solve the technical/coding problem shown in the "
     "image or text. Read it carefully and give a correct, working solution.\n"
