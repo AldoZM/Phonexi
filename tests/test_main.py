@@ -433,3 +433,42 @@ def test_model_and_cli_together_is_refused(capsys):
             main._parse_args()
     assert exc.value.code == 2
     assert "-model" in capsys.readouterr().err
+
+
+# ── Ctrl+C must quit on its own, without a second keypress ─────────────────
+# root.mainloop() blocks inside Tcl's C event loop, where Python never gets to
+# run its SIGINT handler. Without a periodic tick the interrupt sits pending
+# until some Tk event happens to hand control back — which is why Ctrl+C used
+# to need an Escape after it.
+
+def _popup_root():
+    with patch("main.tk.Tk") as tk_cls, \
+         patch("main.HotkeyListener"), \
+         patch("main.threading.Thread"):
+        root = tk_cls.return_value
+        main._run_popup(False)
+    return root
+
+
+def test_popup_schedules_a_tick_so_ctrl_c_lands():
+    root = _popup_root()
+    assert root.after.called, "nothing hands control back to Python"
+    delay = root.after.call_args.args[0]
+    assert 0 < delay <= 500, f"tick of {delay}ms is too slow to feel immediate"
+
+
+def test_the_tick_reschedules_itself():
+    root = _popup_root()
+    tick = root.after.call_args.args[1]
+    root.after.reset_mock()
+    tick()
+    assert root.after.called, "the tick fires once and then stops"
+
+
+def test_ctrl_c_stops_the_popup_cleanly(capsys):
+    with patch("main.tk.Tk") as tk_cls, \
+         patch("main.HotkeyListener"), \
+         patch("main.threading.Thread"):
+        tk_cls.return_value.mainloop.side_effect = KeyboardInterrupt
+        main._run_popup(False)
+    assert "Stopped" in capsys.readouterr().out

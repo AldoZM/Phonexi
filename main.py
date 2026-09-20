@@ -210,6 +210,16 @@ def _run_popup(use_primary: bool, briefing: "str | None" = None,
     t = threading.Thread(target=listener.start, daemon=True)
     t.start()
 
+    # mainloop() blocks inside Tcl's event loop, where Python never reaches a
+    # bytecode boundary and so never runs its SIGINT handler. A no-op tick hands
+    # control back often enough for Ctrl+C to raise on its own — without it the
+    # interrupt waits for a Tk event, which is why quitting needed an Escape
+    # after the Ctrl+C. Same reason _run_web polls instead of blocking on join.
+    def _tick() -> None:
+        root.after(200, _tick)
+
+    root.after(200, _tick)
+
     target = "primary" if use_primary else "secondary"
     print(f"[Phonexi] Running on {target} monitor. "
           "Right Shift + P to capture. Ctrl+C to quit.")
@@ -217,6 +227,11 @@ def _run_popup(use_primary: bool, briefing: "str | None" = None,
         root.mainloop()
     except KeyboardInterrupt:
         print("\n[Phonexi] Stopped.")
+    finally:
+        try:
+            root.destroy()
+        except tk.TclError:
+            pass
 
 
 def _choose_provider(pick: bool) -> None:
