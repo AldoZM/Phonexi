@@ -50,6 +50,7 @@ def choose(
     read_key: "Callable[[], str] | None" = None,
     out: "TextIO | None" = None,
     is_tty: "bool | None" = None,
+    what: str = "model",
 ) -> "Model | None":
     """Let the user pick a model. Returns None when cancelled."""
     out = out or sys.stdout
@@ -57,7 +58,7 @@ def choose(
         is_tty = sys.stdin.isatty() and out.isatty()
     if not is_tty:
         raise PickerUnavailableError(
-            "-model needs an interactive terminal; run Phonexi from a console."
+            f"-{what} needs an interactive terminal; run Phonexi from a console."
         )
     if not models:
         raise PickerUnavailableError(

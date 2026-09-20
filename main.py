@@ -143,7 +143,7 @@ def _choose_cli():
               "(npm i -g @anthropic-ai/claude-code) or Antigravity, or drop the flag.")
         raise SystemExit(1)
     try:
-        chosen = choose(found)
+        chosen = choose(found, what="CLI")
     except PickerUnavailableError:
         print("[Phonexi] -cli needs an interactive terminal; run Phonexi from a console.")
         raise SystemExit(1)

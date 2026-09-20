@@ -385,3 +385,11 @@ def test_without_the_flag_no_engine_is_injected():
          patch("main._run_popup") as run:
         main.main()
     assert run.call_args.args[3] is None
+
+
+def test_the_picker_says_cli_not_model():
+    """The -cli picker must not claim to be choosing a model."""
+    with patch("main.installed_clis", return_value=[_cli_row("claude")]), \
+         patch("main.choose", return_value=_cli_row("claude")) as picker:
+        main._choose_cli()
+    assert picker.call_args.kwargs["what"] == "CLI"
