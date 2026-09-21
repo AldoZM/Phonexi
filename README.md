@@ -2,13 +2,15 @@
 
 Discreet background daemon for Windows that captures screenshots or listens to system audio and answers with an AI model — designed for technical interviews.
 
+Answers come from a hosted API (Groq or Gemini) or, with `-cli`, from a coding-agent CLI already installed on the machine (Claude Code or Antigravity), so the subscription you already pay for answers instead of a free tier.
+
 ## Hotkeys
 
 | Hotkey | Action |
 |--------|--------|
-| `Right Shift + P` | Screenshot → Groq vision LLM → response |
+| `Right Shift + P` | Screenshot → vision model or local CLI → response |
 | `Right Alt + P` (1st press) | Start listening to system audio |
-| `Right Alt + P` (2nd press) | Stop → Whisper transcribes → LLM responds |
+| `Right Alt + P` (2nd press) | Stop → Whisper transcribes → model or CLI responds |
 | `Escape` | Close popup |
 
 ## Features
@@ -18,9 +20,11 @@ Discreet background daemon for Windows that captures screenshots or listens to s
 - **Web mode (`-w`)** — serves answers to your phone over the LAN (scan a terminal QR), auto-updating via SSE; nothing shows on a shared screen
 - **Region capture (`-r`)** — grabs a 16:9 box around the cursor instead of the whole monitor, so the model reads the problem and not the rest of your desktop
 - **Prior context (`-c`)** — point it at a `.md` or `.txt` file (the job posting, the stack, your own experience) and the model answers oriented to it instead of cold
+- **Local CLI engine (`-cli`)** — Claude Code or Antigravity answers instead of the API, on the subscription already paid for. Same hotkeys, same capture, same popup: only who answers changes
+- **Pick the model (`-model`)** — arrow-key picker listing the API models whose provider has a key
 - **Interview-style responses** — direct, confident, no filler
 - **Responds in the question's language** — Spanish question → Spanish answer
-- Groq API free tier — 14,400 requests/day, no credit card required
+- Groq API free tier — 14,400 requests/day, no credit card required. With `-cli` the token quota stops mattering: Whisper is billed in requests, not tokens, so the 8,000 tokens-per-minute bucket is never touched
 - Syntax highlighting (Dracula theme) for code blocks
 - Markdown formatting: headings, bold, italic, inline code
 - Popup on secondary monitor by default — discreet, no taskbar entry, no title bar (use `-P`/`--primary` to show it on the primary monitor)
@@ -58,6 +62,8 @@ Optional keys, all with sensible defaults:
 - `GROQ_REASONING_VISION` / `GROQ_REASONING_TEXT` — thinking budget, default `none` and `low`
 
 Keep `GROQ_MAX_TOKENS` below your account's output-tokens-per-minute allowance, which is 1000 on the free tier. Groq compares the cap against that limit by itself and refuses the whole request with a 429 before generating anything, so 1024 fails while 900 works. A fresh minute lets the larger value through, which makes the failure look intermittent when it is not.
+
+**Local CLI engine (optional).** `AGY_EFFORT` sets the reasoning budget for `-cli agy` (`low`, `medium` or `high`, default `medium`). Nothing else needs configuring: the CLIs carry their own authentication and model choice.
 
 **Gemini (optional).** Add `GEMINI_API_KEY` from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — the free tier needs no card. Whichever key is written **highest** in `.env` picks the default provider; move a line up to switch. Gemini keys: `GEMINI_MODEL` (default `gemini-3.8-flash`, used for text and captures), `GEMINI_MAX_TOKENS` (default `2048`), `GEMINI_REASONING` (`low`, `medium` or `high`; `gemini-3.8-flash` refuses `minimal`). Audio is still transcribed by Groq Whisper, so audio mode needs `GROQ_API_KEY` either way. On the free tier Google may use prompts and captures to improve its products.
 
@@ -132,6 +138,22 @@ voice mode. `agy` has **no flag to restrict tools**, only `--sandbox`, which is 
 weaker guarantee — worth knowing before picking it for a live interview.
 
 Like `-model`, `-cli` needs a console, so it does not work from `start_phonexi.vbs`.
+
+### Which one to run
+
+- **The API (no flag)** when speed decides. The voice flow answers in under two
+  seconds end to end, and nothing beats it live.
+- **`-cli agy`** when the free tier is exhausted or its answers are not good
+  enough. About 4 to 5 seconds to the first word, which is usable in an
+  interview.
+- **`-cli claude`** to prepare beforehand, not to answer during. Its answers are
+  the longest and most thorough, and it takes 14 to 23 seconds to start.
+
+One cost worth knowing: `agy` spends roughly **13,000 input tokens on every
+question before yours is even added** — that is its own agent context, not
+Phonexi's, and no flag reduces it. A voice question costs about 14,000 tokens
+in total, or 19,000 with a `-c` context file loaded. It comes out of the
+Antigravity subscription, not out of any Groq allowance.
 
 Capture a box around the cursor instead of the whole monitor:
 
@@ -210,11 +232,11 @@ Phonexi/
 │   │   ├── api.py        # Adapts processor.py (Groq/Gemini) to the interface
 │   │   ├── claude.py     # Claude Code: flags and stream_event parser
 │   │   └── agy.py        # Antigravity: flags and step_update parser
-│   ├── audio.py          # WASAPI loopback capture + Whisper transcription
+│   ├── audio.py          # WASAPI loopback capture + Whisper transcription (always Groq)
 │   ├── listener.py       # Hotkey detection + orchestration (view-agnostic via view_factory)
 │   ├── ui.py             # Dark draggable popup with syntax highlighting
 │   └── webserver.py      # Web mode: local HTTP + SSE, QR, phone-readable page
-├── tests/                # pytest suite (270 tests)
+├── tests/                # pytest suite (286 tests)
 ├── requirements.txt
 ├── .env                  # NOT committed — add your key here
 └── context.txt           # Full project context for AI assistants
