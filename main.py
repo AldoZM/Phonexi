@@ -6,7 +6,7 @@ import tkinter as tk
 
 from phonexi.briefing import ALLOWED_SUFFIXES, BriefingError
 from phonexi.briefing import load as load_briefing
-from phonexi.engines import get_engine
+from phonexi.engines import engine_for
 from phonexi.engines import installed as installed_clis
 from phonexi.listener import HotkeyListener
 from phonexi.picker import PickerUnavailableError, choose
@@ -36,7 +36,8 @@ Settings in .env:
   GROQ_MODEL_TEXT, GROQ_MODEL_VISION, GEMINI_MODEL   default models
   GROQ_MAX_TOKENS, GEMINI_MAX_TOKENS                 answer length cap
   GROQ_REASONING_TEXT, GROQ_REASONING_VISION, GEMINI_REASONING   thinking budget
-  AGY_EFFORT                     reasoning budget for -cli agy (default high)
+  AGY_EFFORT                     level each -cli row starts on (default low)
+  CLI_PREWARM                    0 starts a fresh agy per question (default 1)
   Audio is always transcribed by Groq Whisper, so it needs GROQ_API_KEY --
   that holds with -cli too, since neither CLI processes audio.
 """
@@ -154,10 +155,17 @@ def _choose_cli():
     if chosen is None:
         print("[Phonexi] Cancelled.")
         raise SystemExit(0)
-    engine = get_engine(chosen.name)
-    print(f"[Phonexi] Using {engine.LABEL} ({chosen.name}). "
+    engine = engine_for(chosen)
+    level = f" ({chosen.level})" if chosen.level else ""
+    print(f"[Phonexi] Using {engine.LABEL}: {chosen.name}{level}. "
           "Audio still goes through Groq Whisper.")
     return engine
+
+
+def _warm(engine) -> None:
+    """Start the -cli spare now, so even the first hotkey skips CLI startup."""
+    if engine is not None and hasattr(engine, "warm"):
+        engine.warm()
 
 
 def _run_web(briefing: "str | None" = None, region: "tuple | None" = None,
@@ -184,6 +192,7 @@ def _run_web(briefing: "str | None" = None, region: "tuple | None" = None,
         region=region,
         engine=engine,
     )
+    _warm(engine)
     t = threading.Thread(target=listener.start, daemon=True)
     t.start()
     try:
@@ -207,6 +216,7 @@ def _run_popup(use_primary: bool, briefing: "str | None" = None,
         region=region,
         engine=engine,
     )
+    _warm(engine)
     t = threading.Thread(target=listener.start, daemon=True)
     t.start()
 

@@ -14,6 +14,13 @@ class ClaudeEngine(CliEngine):
     BINARY = "claude"
     LABEL = "Claude Code"
 
+    def __init__(self, effort: "str | None" = None, prewarm: bool = False) -> None:
+        # No session_argv yet, so prewarm is accepted and has no effect.
+        super().__init__(prewarm)
+        # None leaves claude on its own default, which is what -cli sent
+        # before the picker had levels.
+        self.effort = effort
+
     def argv(self, exe: str, prompt: str, image: "Path | None") -> list[str]:
         args = [
             exe,
@@ -26,6 +33,8 @@ class ClaudeEngine(CliEngine):
             # Reading the screenshot is the only tool it ever needs.
             "--allowed-tools", "Read" if image else "",
         ]
+        if self.effort:
+            args += ["--effort", self.effort]
         if image is not None:
             # It refuses to read outside its working directory, and Phonexi may
             # well be launched from somewhere else entirely.

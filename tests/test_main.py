@@ -283,10 +283,10 @@ def test_main_model_flag_starts_on_the_current_default():
 
 # ── -cli: pick a local CLI engine with the -model picker ────────────────────
 
-def _cli_row(name):
-    from phonexi.engines import CLI
-    from phonexi.providers import Model
-    return Model(CLI, name, vision=True, audio=False)
+def _cli_row(name, level="medium", ids=()):
+    from phonexi.engines.base import CliChoice
+    labels = {"claude": "Claude Code", "agy": "Antigravity"}
+    return CliChoice(name, labels[name], ("low", "medium", "high"), level, ids)
 
 
 def test_parse_args_cli_flag():
@@ -319,7 +319,7 @@ def test_choose_cli_only_offers_installed_clis():
          patch("main.choose", return_value=_cli_row("agy")) as picker:
         main._choose_cli()
     found.assert_called_once_with()
-    assert [m.name for m in picker.call_args.args[0]] == ["agy"]
+    assert [m.provider for m in picker.call_args.args[0]] == ["agy"]
 
 
 def test_choose_cli_exits_when_nothing_is_installed(capsys):
@@ -435,6 +435,25 @@ def test_model_and_cli_together_is_refused(capsys):
     assert "-model" in capsys.readouterr().err
 
 
+def test_choose_cli_builds_the_engine_with_the_chosen_model_and_level(capsys):
+    row = _cli_row("agy", level="low",
+                   ids=(("low", "gemini-3.8-flash-low"), ("high", "gemini-3.8-flash-high")))
+    with patch("main.installed_clis", return_value=[row]), \
+         patch("main.choose", return_value=row):
+        engine = main._choose_cli()
+    assert engine.model == "gemini-3.8-flash-low"
+    out = capsys.readouterr().out
+    assert "Antigravity" in out and "(low)" in out
+
+
+def test_choose_cli_hands_claude_its_effort():
+    row = _cli_row("claude", level="high")
+    with patch("main.installed_clis", return_value=[row]), \
+         patch("main.choose", return_value=row):
+        engine = main._choose_cli()
+    assert engine.effort == "high"
+
+
 # ── Ctrl+C must quit on its own, without a second keypress ─────────────────
 # root.mainloop() blocks inside Tcl's C event loop, where Python never gets to
 # run its SIGINT handler. Without a periodic tick the interrupt sits pending
@@ -472,3 +491,25 @@ def test_ctrl_c_stops_the_popup_cleanly(capsys):
         tk_cls.return_value.mainloop.side_effect = KeyboardInterrupt
         main._run_popup(False)
     assert "Stopped" in capsys.readouterr().out
+
+
+# ── -cli: the first spare is started before the first hotkey ────────────────
+
+def test_popup_mode_warms_the_engine_before_listening():
+    engine = MagicMock()
+    with patch("main.tk.Tk"), patch("main.HotkeyListener"), patch("main.threading.Thread"):
+        main._run_popup(False, None, None, engine)
+    engine.warm.assert_called_once_with()
+
+
+def test_web_mode_warms_the_engine_before_listening():
+    engine = MagicMock()
+    with patch("main._print_qr"), \
+         patch("phonexi.webserver.WebServer") as server_cls, \
+         patch("phonexi.webserver.lan_ip", return_value="192.168.1.42"), \
+         patch("main.HotkeyListener"), \
+         patch("main.threading.Thread") as thread_cls:
+        server_cls.return_value.port = 8000
+        thread_cls.return_value.is_alive.return_value = False
+        main._run_web(None, None, engine)
+    engine.warm.assert_called_once_with()

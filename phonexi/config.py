@@ -44,14 +44,18 @@ GEMINI_MAX_TOKENS: int = int(os.getenv("GEMINI_MAX_TOKENS", "2048"))
 # Gemini spells the levels minimal/low/medium/high.
 GEMINI_REASONING: str = os.getenv("GEMINI_REASONING", "low")
 
-# Reasoning budget for the agy CLI engine (low|medium|high). Measured on
-# 2026-09-20 on one interview question, timing the first word: low 2.9s,
-# medium 3.1s, high 52s. high thinks seventeen times longer without writing
-# more -- 3122 characters against low's 3926 -- and leaves the popup blank
-# while the interviewer waits. medium is the level that keeps the voice flow
-# usable. Raise it to high only to prepare before an interview, not to answer
-# during one.
-AGY_EFFORT: str = os.getenv("AGY_EFFORT", "medium")
+# Level each -cli row starts on (low|medium|high); Left/Right in the picker
+# changes it per run. Measured on 2026-09-20 on one interview question, timing
+# the first word: low 2.9s, medium 3.1s, high 52s. high thinks seventeen times
+# longer without writing more -- 3122 characters against low's 3926 -- and
+# leaves the popup blank while the interviewer waits. low also spent zero
+# thinking tokens on 2026-09-22, so it is the default for answering live.
+AGY_EFFORT: str = os.getenv("AGY_EFFORT", "low")
+
+# Keep a -cli process started and waiting so a question skips its startup:
+# 3.8 s of auth and setup per answer on 2026-09-22. CLI_PREWARM=0 goes back to
+# one fresh process per question.
+CLI_PREWARM: bool = os.getenv("CLI_PREWARM", "1") != "0"
 
 PROMPT = (
     "You are an expert software engineer. Solve the technical/coding problem shown in the "

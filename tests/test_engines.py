@@ -267,17 +267,20 @@ def test_get_engine_rejects_an_unknown_name():
 
 
 def test_installed_lists_only_what_is_on_the_machine(monkeypatch):
+    from phonexi.engines import agy
     monkeypatch.setattr(
         engines.base.shutil, "which",
         lambda name: "C:/fake/agy.exe" if name == "agy" else None,
     )
-    names = [m.name for m in installed()]
-    assert names == ["agy"]
+    monkeypatch.setattr(agy, "list_models", lambda exe: [])
+    assert [m.provider for m in installed()] == ["agy"]
 
 
 def test_installed_rows_render_in_the_model_picker(monkeypatch):
     """The picker draws provider/name/capabilities, so CLIs must fit that shape."""
+    from phonexi.engines import agy
     monkeypatch.setattr(engines.base.shutil, "which", lambda name: "C:/fake/cli.exe")
+    monkeypatch.setattr(agy, "list_models", lambda exe: [])
     for row in installed():
         assert row.provider and row.name
         assert "vision" in row.capabilities
@@ -366,6 +369,180 @@ def test_agy_asks_for_the_configured_effort(wired):
     assert argv[argv.index("--effort") + 1] == AGY_EFFORT
 
 
-def test_agy_defaults_to_medium_effort():
-    from phonexi.config import AGY_EFFORT
-    assert AGY_EFFORT == "medium"
+def test_agy_defaults_to_low_effort(monkeypatch):
+    # low spent 0 thinking tokens on 2026-09-22 and was 0.24 s faster to the
+    # first word than medium on 2026-09-20. Read with no .env override.
+    import importlib
+    from phonexi import config
+    monkeypatch.delenv("AGY_EFFORT", raising=False)
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: False)
+    try:
+        assert importlib.reload(config).AGY_EFFORT == "low"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config)
+
+
+# ── agy models: one row per family, effort on Left/Right ────────────────────
+
+AGY_MODELS_OUTPUT = """Fetching available models...
+gemini-3.8-flash-high\tGemini 3.8 Flash (High)
+gemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)
+gemini-3.8-flash-low\tGemini 3.8 Flash (Low)
+gemini-3.1-pro-high\tGemini 3.1 Pro (High)
+gemini-3.1-pro-low\tGemini 3.1 Pro (Low)
+claude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)
+gpt-oss-120b-medium\tGPT-OSS 120B (Medium)
+"""
+
+
+def test_agy_models_are_grouped_by_family():
+    from phonexi.engines.agy import parse_models
+    rows = parse_models(AGY_MODELS_OUTPUT)
+    assert [r.name for r in rows] == [
+        "Gemini 3.8 Flash", "Gemini 3.1 Pro", "Claude Sonnet 4.6 (Thinking)", "GPT-OSS 120B",
+    ]
+    assert all(r.provider == "agy" for r in rows)
+
+
+def test_agy_levels_come_in_speed_order():
+    from phonexi.engines.agy import parse_models
+    flash = parse_models(AGY_MODELS_OUTPUT)[0]
+    assert flash.levels == ("low", "medium", "high")
+
+
+def test_agy_level_starts_on_agy_effort():
+    from phonexi.engines.agy import parse_models
+    flash = parse_models(AGY_MODELS_OUTPUT, default="medium")[0]
+    assert flash.level == "medium"
+    assert flash.model_id == "gemini-3.8-flash-medium"
+
+
+def test_agy_level_falls_back_to_low_when_the_default_is_missing():
+    # high took 17x longer to the first word, so a missing medium means low.
+    from phonexi.engines.agy import parse_models
+    pro = parse_models(AGY_MODELS_OUTPUT, default="medium")[1]
+    assert pro.levels == ("low", "high")
+    assert pro.level == "low"
+
+
+def test_agy_model_without_levels_keeps_its_own_id():
+    from phonexi.engines.agy import parse_models
+    sonnet = parse_models(AGY_MODELS_OUTPUT)[2]
+    assert sonnet.levels == ()
+    assert sonnet.model_id == "claude-sonnet-4-6"
+
+
+def test_choosing_another_level_changes_the_model_id():
+    import dataclasses
+    from phonexi.engines.agy import parse_models
+    flash = parse_models(AGY_MODELS_OUTPUT)[0]
+    assert dataclasses.replace(flash, level="high").model_id == "gemini-3.8-flash-high"
+
+
+def test_agy_models_output_without_models_gives_nothing():
+    from phonexi.engines.agy import parse_models
+    assert parse_models("Fetching available models...\n") == []
+
+
+def test_list_models_runs_agy_models_with_a_timeout(monkeypatch):
+    from phonexi.engines import agy
+    seen = {}
+
+    def run(argv, **kwargs):
+        seen["argv"], seen["timeout"] = argv, kwargs.get("timeout")
+        return subprocess.CompletedProcess(argv, 0, stdout=AGY_MODELS_OUTPUT, stderr="")
+
+    monkeypatch.setattr(agy.subprocess, "run", run)
+    rows = agy.list_models("C:/fake/agy.exe")
+    assert seen["argv"] == ["C:/fake/agy.exe", "models"]
+    assert seen["timeout"] and seen["timeout"] <= 10
+    assert len(rows) == 4
+
+
+@pytest.mark.parametrize("failure", ["timeout", "exit", "oserror"])
+def test_list_models_failure_gives_nothing(monkeypatch, failure):
+    from phonexi.engines import agy
+
+    def run(argv, **kwargs):
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(argv, 10)
+        if failure == "oserror":
+            raise OSError("boom")
+        return subprocess.CompletedProcess(argv, 1, stdout="", stderr="auth")
+
+    monkeypatch.setattr(agy.subprocess, "run", run)
+    assert agy.list_models("C:/fake/agy.exe") == []
+
+
+def _only(monkeypatch, *present):
+    monkeypatch.setattr(
+        engines.base.shutil, "which",
+        lambda name: f"C:/fake/{name}.exe" if name in present else None,
+    )
+
+
+def test_installed_lists_agy_models_then_claude(monkeypatch):
+    from phonexi.engines import agy
+    _only(monkeypatch, "agy", "claude")
+    monkeypatch.setattr(agy, "list_models", lambda exe: agy.parse_models(AGY_MODELS_OUTPUT))
+    rows = installed()
+    assert [r.provider for r in rows] == ["agy"] * 4 + ["claude"]
+    assert rows[-1].levels == ("low", "medium", "high")
+    assert rows[-1].level == "medium"
+
+
+def test_installed_falls_back_to_one_agy_row_without_a_model_list(monkeypatch):
+    from phonexi.engines import agy
+    _only(monkeypatch, "agy")
+    monkeypatch.setattr(agy, "list_models", lambda exe: [])
+    rows = installed()
+    assert len(rows) == 1
+    assert rows[0].provider == "agy"
+    assert rows[0].model_id is None
+    assert rows[0].levels == ("low", "medium", "high")
+
+
+def test_agy_with_a_model_passes_it_and_no_effort(wired):
+    record = wired(agy_lines("ok"))
+    list(AgyEngine(model="gemini-3.8-flash-low").answer_text("why?"))
+    argv = record["argv"]
+    assert argv[argv.index("--model") + 1] == "gemini-3.8-flash-low"
+    assert "--effort" not in argv
+
+
+def test_agy_without_a_model_passes_the_effort(wired):
+    record = wired(agy_lines("ok"))
+    list(AgyEngine(effort="low").answer_text("why?"))
+    argv = record["argv"]
+    assert "--model" not in argv
+    assert argv[argv.index("--effort") + 1] == "low"
+
+
+def test_claude_passes_the_chosen_effort(wired):
+    record = wired(claude_lines("ok"))
+    list(ClaudeEngine(effort="low").answer_text("why?"))
+    argv = record["argv"]
+    assert argv[argv.index("--effort") + 1] == "low"
+
+
+def test_claude_without_an_effort_sends_none(wired):
+    record = wired(claude_lines("ok"))
+    list(ClaudeEngine().answer_text("why?"))
+    assert "--effort" not in record["argv"]
+
+
+def test_engine_for_maps_a_choice_to_its_engine():
+    import dataclasses
+    from phonexi.engines import engine_for
+    from phonexi.engines.agy import parse_models
+    from phonexi.engines.base import CliChoice
+
+    flash = dataclasses.replace(parse_models(AGY_MODELS_OUTPUT)[0], level="low")
+    agy_engine = engine_for(flash)
+    assert isinstance(agy_engine, AgyEngine)
+    assert agy_engine.model == "gemini-3.8-flash-low"
+
+    claude = engine_for(CliChoice("claude", "Claude Code", ("low", "medium", "high"), "high"))
+    assert isinstance(claude, ClaudeEngine)
+    assert claude.effort == "high"

@@ -63,7 +63,7 @@ Optional keys, all with sensible defaults:
 
 Keep `GROQ_MAX_TOKENS` below your account's output-tokens-per-minute allowance, which is 1000 on the free tier. Groq compares the cap against that limit by itself and refuses the whole request with a 429 before generating anything, so 1024 fails while 900 works. A fresh minute lets the larger value through, which makes the failure look intermittent when it is not.
 
-**Local CLI engine (optional).** `AGY_EFFORT` sets the reasoning budget for `-cli agy` (`low`, `medium` or `high`, default `medium`). Nothing else needs configuring: the CLIs carry their own authentication and model choice.
+**Local CLI engine (optional).** `AGY_EFFORT` sets the level each `-cli` row starts on (`low`, `medium` or `high`, default `low`); Left/Right in the picker changes it per run. Nothing else needs configuring: the CLIs carry their own authentication and model choice.
 
 **Gemini (optional).** Add `GEMINI_API_KEY` from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — the free tier needs no card. Whichever key is written **highest** in `.env` picks the default provider; move a line up to switch. Gemini keys: `GEMINI_MODEL` (default `gemini-3.8-flash`, used for text and captures), `GEMINI_MAX_TOKENS` (default `2048`), `GEMINI_REASONING` (`low`, `medium` or `high`; `gemini-3.8-flash` refuses `minimal`). Audio is still transcribed by Groq Whisper, so audio mode needs `GROQ_API_KEY` either way. On the free tier Google may use prompts and captures to improve its products.
 
@@ -99,10 +99,23 @@ python main.py -cli
 ```
 
 ```
-Choose a CLI (Up/Down, Enter to confirm, Esc to cancel):
-> cli     claude  text, vision
-  cli     agy     text, vision
+Choose a CLI (Up/Down, Left/Right effort, Enter to confirm, Esc to cancel):
+> agy     Gemini 3.8 Flash              < medium >
+  agy     Gemini 3.7 Flash              < medium >
+  agy     Gemini 3.6 Flash              < medium >
+  agy     Gemini 3.1 Pro                < low >
+  agy     Claude Sonnet 4.6 (Thinking)  text, vision
+  agy     Claude Opus 4.6 (Thinking)    text, vision
+  agy     GPT-OSS 120B                  < medium >
+  claude  Claude Code                   < medium >
 ```
+
+Up/Down picks the model, Left/Right its effort. `agy` rows come from `agy models`
+at startup (about 4 seconds, it asks over the network), one row per model family,
+so a retired model never shows up. Each row starts on `AGY_EFFORT`, or on `low`
+when the model has no such level. If the list cannot be read within 10 seconds a
+single `agy` row remains and agy picks the model itself, as before. The
+`Claude Code` row sends its level as `--effort`.
 
 Only CLIs found on `PATH` are listed, and a missing one stops startup rather than
 surfacing mid-interview. Everything else is unchanged: same hotkeys, same capture,
@@ -110,26 +123,39 @@ same popup, same web mode. What changes is who answers.
 
 Two things to know before relying on it:
 
-- **It is slower, and the voice flow shows it worst.** Every question launches
-  a process. Measured end to end on 2026-09-20 — from releasing the hotkey to
-  the first word on screen — the voice flow takes about 4 to 5 seconds with
-  `agy` at medium (1.2s of Whisper plus ~3s of CLI) and finishes in 6 to 7. The
-  same flow on the Groq API takes 1.8s and finishes in 2.4s. `claude` is
-  slower still: 14 to 23 seconds to the first word and up to 43 to finish.
+- **`agy` answers from a process started ahead of time.** A fresh `agy`
+  spends about 3.8 s of every question signing in and setting up before the
+  model sees anything (measured 2026-09-22). Phonexi keeps one already started
+  and waiting on stdin, hands it the question on the hotkey, and starts the
+  next one at that same moment. Four questions a second apart all reached the
+  first word in 1.6 to 1.7 s, against 4.8 to 6.5 s with a fresh process each
+  time, and spares left waiting 2, 6 and 15 minutes still answered in 1.7 to 2 s. Each spare
+  answers one question, so history never piles up: agy read nothing from
+  cache, so one long session only made every turn heavier. `CLI_PREWARM=0` in
+  `.env` goes back to a fresh process per question. The popup now shows the
+  answer as it streams and applies the formatting when it ends.
+- **Captures are still slower than voice.** agy accepts only text on stdin,
+  so a screenshot still travels as a path the model opens with a tool: two
+  model calls and about 26,500 input tokens, 5.7 s to finish even with the
+  process already started. Windows' built-in OCR was measured as a way around
+  it and rejected: 150 ms, but it dropped subscripts, operators and example
+  values from a LeetCode statement.
+- **`claude` has no spare yet** and stays slow: 14 to 23 seconds to the first
+  word and up to 43 to finish (2026-09-20).
 - **Audio still needs `GROQ_API_KEY`.** Neither CLI transcribes a `.wav`, so
   Whisper keeps doing that half of the voice flow. Only the answer comes from
   the CLI.
 
-`agy` runs on Gemini 3.8 Flash at **medium** effort, set explicitly with
-`--effort` rather than left to whatever its own config holds. The level is the
-single biggest lever on how fast an answer starts. Timing the first word on one
+Each row starts at **low** effort, sent explicitly rather than left to
+whatever agy's own config holds; low spent zero thinking tokens when measured
+on 2026-09-22. `high` is the level to avoid while answering live. Timing the first word on one
 interview question, 2026-09-20: low 2.9s, medium 3.1s, high **52s**. high does
 not write more for that wait — 3122 characters against low's 3926 — it just
 thinks longer, and the popup stays blank while the interviewer waits. Override
 with `AGY_EFFORT` in `.env`, and raise it to `high` only to prepare before an
 interview, never to answer during one.
 
-Which model `agy` uses is its own setting; Phonexi does not pin it, so a
+The model is whatever the picker row names, read live from `agy models`, so a
 retired model cannot break the flag.
 
 These are coding agents, not chat endpoints, so both are kept on a short leash:

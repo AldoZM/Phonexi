@@ -216,6 +216,10 @@ class ResultWindow:
             buf: list[str] = []
             try:
                 for token in iterator:
+                    # Raw text now, formatting at the end: waiting for the last
+                    # token hid a first word that arrives in ~1.5 s behind a
+                    # blank popup for the whole answer.
+                    self._root.after(0, self._append_live, token, not buf)
                     buf.append(token)
             except Exception as exc:
                 self._root.after(0, self._ins, f"\n[error: {exc}]", "err")
@@ -243,6 +247,12 @@ class ResultWindow:
             return True
         except tk.TclError:
             return False
+
+    def _append_live(self, token: str, first: bool) -> None:
+        # The first token replaces the "Analyzing" status line.
+        if first and not self._clear():
+            return
+        self._ins(token)
 
     def _do_render(self, text: str) -> None:
         if not self._clear():
