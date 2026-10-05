@@ -1,8 +1,8 @@
-import array as _array
 import io
 import threading
 import wave
 
+import numpy as np
 import pyaudiowpatch as pyaudio
 from groq import Groq
 
@@ -15,18 +15,29 @@ _TARGET_RATE = 16000
 
 
 def _to_mono_16k(raw: bytes, channels: int, samplerate: int) -> tuple[bytes, int]:
-    """Downsample to mono 16kHz. Reduces WAV size ~6x for typical 48kHz stereo input."""
-    samples = _array.array("h", raw)
+    """Downsample to mono 16kHz. Reduces WAV size ~6x for typical 48kHz stereo input.
+
+    Vectorised on purpose. 30s of 48kHz stereo is 2.9M samples, and averaging
+    them with a Python append loop cost 0.59s (1.37s at 60s) of dead time after
+    the hotkey was released, before a byte reached the network. numpy does the
+    same arithmetic in 0.035s. Measured 2026-09-22.
+    """
+    samples = np.frombuffer(raw, dtype="<i2")
 
     if channels > 1:
-        mono = _array.array("h")
-        for i in range(0, len(samples), channels):
-            mono.append(sum(samples[i : i + channels]) // channels)
+        # Drop a trailing partial frame: averaging it would divide by channels
+        # it does not have and emit a half-amplitude sample. WASAPI always
+        # returns whole frames, so this only guards malformed input.
+        usable = (len(samples) // channels) * channels
+        frames = samples[:usable].reshape(-1, channels)
+        # int32 before summing: int16 channels overflow near full scale. The
+        # floor division matches Python's, negatives included.
+        mono = (frames.astype(np.int32).sum(axis=1) // channels).astype(np.int16)
     else:
         mono = samples
 
     step = max(1, round(samplerate / _TARGET_RATE))
-    decimated = _array.array("h", mono[::step])
+    decimated = mono[::step]
     actual_rate = samplerate // step
 
     return decimated.tobytes(), actual_rate
