@@ -20,7 +20,8 @@ from phonexi.config import (
     GROQ_MAX_TOKENS,
     GROQ_REASONING_TEXT,
     GROQ_REASONING_VISION,
-    PROMPT,
+    PROMPT_CAPTURE,
+    PROMPT_VOICE,
 )
 from phonexi.relevance import select
 
@@ -247,7 +248,7 @@ def process_text(
 ) -> Iterator[str]:
     client = _client()
     max_tokens, reasoning = _limits(vision=False)
-    messages: list[dict] = [{"role": "system", "content": PROMPT}]
+    messages: list[dict] = [{"role": "system", "content": PROMPT_VOICE}]
 
     brief_msg = _briefing_message(briefing, question)
     if brief_msg is not None:
@@ -287,7 +288,7 @@ def process(path: Path, briefing: "str | None" = None) -> Iterator[str]:
                     "type": "image_url",
                     "image_url": {"url": f"data:image/png;base64,{image_b64}"},
                 },
-                {"type": "text", "text": PROMPT},
+                {"type": "text", "text": PROMPT_CAPTURE},
             ],
         }
     )

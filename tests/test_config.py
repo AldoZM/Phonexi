@@ -11,5 +11,5 @@ def test_groq_api_key_is_string():
 
 
 def test_prompt_is_string():
-    assert isinstance(config.PROMPT, str)
-    assert len(config.PROMPT) > 0
+    assert isinstance(config.PROMPT_VOICE, str)
+    assert len(config.PROMPT_VOICE) > 0

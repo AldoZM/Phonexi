@@ -330,7 +330,8 @@ def test_a_shim_pointing_nowhere_falls_back_to_itself(monkeypatch, tmp_path):
 def test_the_prompt_really_does_contain_newlines():
     """Guards the reason the shim matters: a one-line prompt would hide the bug."""
     from phonexi.engines.base import system_prompt
-    assert "\n" in system_prompt()
+    assert "\n" in system_prompt(voice=True)
+    assert "\n" in system_prompt(voice=False)
 
 
 # ── claude only reads inside its working directory ─────────────────────────
@@ -546,3 +547,35 @@ def test_engine_for_maps_a_choice_to_its_engine():
     claude = engine_for(CliChoice("claude", "Claude Code", ("low", "medium", "high"), "high"))
     assert isinstance(claude, ClaudeEngine)
     assert claude.effort == "high"
+
+
+# ── each hotkey carries its own prompt ──────────────────────────────────────
+
+def test_claude_answers_voice_with_the_voice_prompt(wired):
+    from phonexi.config import PROMPT_VOICE
+    record = wired(claude_lines("hi"))
+    list(ClaudeEngine().answer_text("why?"))
+    argv = record["argv"]
+    assert argv[argv.index("--system-prompt") + 1] == PROMPT_VOICE
+
+
+def test_claude_answers_a_capture_with_the_capture_prompt(wired, tmp_path):
+    from phonexi.config import PROMPT_CAPTURE
+    shot = tmp_path / "shot.png"
+    shot.write_bytes(b"\x89PNG")
+    record = wired(claude_lines("hi"))
+    list(ClaudeEngine().answer_image(shot))
+    argv = record["argv"]
+    assert argv[argv.index("--system-prompt") + 1] == PROMPT_CAPTURE
+
+
+def test_agy_prepends_the_prompt_of_each_mode(wired, tmp_path):
+    from phonexi.config import PROMPT_CAPTURE, PROMPT_VOICE
+    record = wired(agy_lines("hi"))
+    list(AgyEngine().answer_text("why?"))
+    assert record["argv"][record["argv"].index("-p") + 1].startswith(PROMPT_VOICE)
+    shot = tmp_path / "shot.png"
+    shot.write_bytes(b"\x89PNG")
+    record = wired(agy_lines("hi"))
+    list(AgyEngine().answer_image(shot))
+    assert record["argv"][record["argv"].index("-p") + 1].startswith(PROMPT_CAPTURE)

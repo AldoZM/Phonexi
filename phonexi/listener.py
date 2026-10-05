@@ -179,7 +179,8 @@ class HotkeyListener:
             response = win.show_and_collect(
                 self._engine.answer_text(
                     text, context=self._context, briefing=self._briefing
-                )
+                ),
+                status="Answering...",
             )
             if response:
                 self._context = Context(user_turn=text, assistant_turn=response)

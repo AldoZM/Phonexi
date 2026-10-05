@@ -207,3 +207,131 @@ def test_streaming_into_a_closed_popup_does_not_raise(root):
     win = ResultWindow(root)
     win.close()
     _collect_in_worker(root, win, iter(["late", " tokens"]))
+
+
+def _tags_at(win, word, nth=0):
+    """Tags on the nth occurrence of word in the rendered popup."""
+    idx = "1.0"
+    for _ in range(nth + 1):
+        idx = win._text.search(word, idx, stopindex=tk.END)
+        assert idx, f"{word!r} not rendered"
+        found, idx = idx, f"{idx}+1c"
+    return set(win._text.tag_names(found))
+
+
+def test_compared_terms_get_different_highlight_colors(root):
+    """In 'A vs B' both terms were the same yellow, so neither stood out."""
+    win = ResultWindow(root)
+    win._do_render("**TCP** is reliable; **UDP** is not.")
+    tcp, udp = _tags_at(win, "TCP"), _tags_at(win, "UDP")
+    assert "hl0" in tcp and "hl1" in udp
+    assert win._text.tag_cget("hl0", "background") != win._text.tag_cget("hl1", "background")
+    win._win.destroy()
+
+
+def test_a_repeated_term_keeps_its_color(root):
+    """Case and a trailing colon do not make it a new term."""
+    win = ResultWindow(root)
+    win._do_render("**TCP** vs **UDP**\n- **tcp:** ordered\n- **UDP:** fast")
+    assert "hl0" in _tags_at(win, "tcp")
+    assert "hl1" in _tags_at(win, "UDP", nth=1)
+    win._win.destroy()
+
+
+def test_highlight_colors_cycle_past_the_palette(root):
+    win = ResultWindow(root)
+    n = len(ResultWindow._HIGHLIGHTS)
+    win._do_render(" ".join(f"**t{i}x**" for i in range(n + 1)))
+    assert f"hl0" in _tags_at(win, f"t{n}x")
+    win._win.destroy()
+
+
+def test_code_inside_bold_loses_its_backticks(root):
+    """**`acks=all`:** showed the backticks raw inside the highlight."""
+    win = ResultWindow(root)
+    win._do_render("- **`acks=all`:** waits for the ISR")
+    assert "`" not in _widget_text(win)
+    assert "hl0" in _tags_at(win, "acks=all")
+    win._win.destroy()
+
+
+def test_same_term_with_and_without_backticks_shares_a_color(root):
+    win = ResultWindow(root)
+    win._do_render("**`acks`** then **acks** then **other**")
+    assert "hl0" in _tags_at(win, "acks", nth=1)
+    assert "hl1" in _tags_at(win, "other")
+    win._win.destroy()
+
+
+def test_star_bullets_keep_their_bold_term(root):
+    """'* **Pro:** x' read the bullet star as an italic opener."""
+    win = ResultWindow(root)
+    win._do_render("* **Pro:** decouples\n* plain `code` bullet")
+    assert "*" not in _widget_text(win)
+    assert "hl0" in _tags_at(win, "Pro:")
+    win._win.destroy()
+
+
+def test_italic_inside_bold_loses_its_stars(root):
+    """**Salado de claves (*key salting*):** showed the stars inside the highlight."""
+    win = ResultWindow(root)
+    win._do_render("- **Salado de claves (*key salting*):** sufijo aleatorio")
+    assert "*" not in _widget_text(win)
+    assert "hl0" in _tags_at(win, "key salting")
+    win._win.destroy()
+
+
+# ── key phrases: one colour that means "say this" ───────────────────────────
+
+def test_key_phrase_gets_the_key_highlight(root):
+    win = ResultWindow(root)
+    win._do_render("Order holds ==within each partition== only.")
+    assert "=" not in _widget_text(win)
+    assert "key" in _tags_at(win, "within each partition")
+    win._win.destroy()
+
+
+def test_labels_are_not_colored_when_the_answer_has_key_phrases(root):
+    """Four bullet titles in four colours meant nothing (Kafka ordering answer)."""
+    win = ResultWindow(root)
+    win._do_render("- **Offsets:** ==strictly ordered== per partition\n- **Keys:** same key")
+    for label in ("Offsets:", "Keys:"):
+        tags = _tags_at(win, label)
+        assert "strong" in tags
+        assert not any(t.startswith("hl") for t in tags)
+    win._win.destroy()
+
+
+def test_comparisons_without_key_phrases_keep_per_term_colors(root):
+    win = ResultWindow(root)
+    win._do_render("- **TCP:** reliable\n- **UDP:** fast")
+    assert "hl0" in _tags_at(win, "TCP:") and "hl1" in _tags_at(win, "UDP:")
+    win._win.destroy()
+
+
+def test_an_equality_in_prose_is_not_a_key_phrase(root):
+    win = ResultWindow(root)
+    win._do_render("if a == b and c == d then")
+    assert "a == b and c == d" in _widget_text(win)
+    win._win.destroy()
+
+
+def _gated(gate, token):
+    gate.wait(3)
+    yield token
+
+
+def test_the_waiting_line_can_be_set_per_mode(root):
+    win = ResultWindow(root)
+    gate = threading.Event()
+    t = threading.Thread(
+        target=lambda: win.show_and_collect(_gated(gate, "x"), status="Answering..."),
+        daemon=True)
+    t.start()
+    try:
+        assert _pump(root, lambda: "Answering..." in _widget_text(win))
+        assert "screenshot" not in _widget_text(win)
+    finally:
+        gate.set()
+    assert _pump(root, lambda: not t.is_alive())
+    win._win.destroy()

@@ -68,8 +68,16 @@ class ResultWindow:
         self._text.tag_configure("h1",       foreground="#8be9fd", font=(fn, fs + 3, "bold"))
         self._text.tag_configure("h2",       foreground="#8be9fd", font=(fn, fs + 1, "bold"))
         self._text.tag_configure("h3",       foreground="#8be9fd", font=(fn, fs,     "bold"))
-        self._text.tag_configure("bold",     foreground="#282a36", background="#f1fa8c",
-                                  font=(fn, fs, "bold"))
+        # Bold is a highlighter, one colour per distinct term, so the two sides
+        # of an "A vs B" answer can be told apart at a glance.
+        for i, color in enumerate(self._HIGHLIGHTS):
+            self._text.tag_configure(f"hl{i}", foreground="#282a36", background=color,
+                                     font=(fn, fs, "bold"))
+        # ==key phrase==: the words to say, always the same colour.
+        self._text.tag_configure("key", foreground="#282a36", background=self._HIGHLIGHTS[0],
+                                 font=(fn, fs, "bold"))
+        # Bold that is not a compared term (a bullet label) stays plain bold.
+        self._text.tag_configure("strong", foreground="#f8f8f2", font=(fn, fs, "bold"))
         self._text.tag_configure("italic",   foreground="#f8f8f2",  font=(fn, fs,     "italic"))
         self._text.tag_configure("icode",    foreground="#50fa7b",  background="#1c1c1c")
         self._text.tag_configure("code_bg",  background=self._CODE_BG,
@@ -129,11 +137,28 @@ class ResultWindow:
     # ── markdown renderer ────────────────────────────────────────────────────
 
     _CODE_FENCE  = re.compile(r"```(\w*)\n(.*?)```", re.DOTALL)
-    _INLINE_RE   = re.compile(r"\*\*(.*?)\*\*|\*(.*?)\*|`([^`]+)`")
+    # The last group is a ==key phrase==; no space inside the marks, so an
+    # equality like "a == b" in prose stays text.
+    _INLINE_RE   = re.compile(r"\*\*(.*?)\*\*|\*(.*?)\*|`([^`]+)`|==(?=\S)(.+?)(?<=\S)==")
     _HEADING_RE  = re.compile(r"^(#{1,3})\s+(.*)")
     _DIVIDER_RE  = re.compile(r"^[-/]{3,}\s*$")
+    _STAR_BULLET_RE = re.compile(r"^(\s*)\* ")
+    # Dracula yellow, cyan, pink, green, orange.
+    _HIGHLIGHTS  = ("#f1fa8c", "#8be9fd", "#ff79c6", "#50fa7b", "#ffb86c")
+
+    def _highlight_tag(self, term: str) -> str:
+        # "TCP", "tcp" and "TCP:" are the same term and share a colour.
+        key = term.strip().rstrip(":").strip().lower()
+        if key not in self._term_colors:
+            self._term_colors[key] = len(self._term_colors) % len(self._HIGHLIGHTS)
+        return f"hl{self._term_colors[key]}"
 
     def _render_markdown(self, text: str) -> None:
+        self._term_colors: dict[str, int] = {}
+        # An answer that marks key phrases is not a comparison, so its bold is a
+        # label and gets no colour; only comparisons colour bold per term.
+        prose = self._CODE_FENCE.sub("", text)
+        self._has_key_phrases = any(m.group(4) for m in self._INLINE_RE.finditer(prose))
         last = 0
         for m in self._CODE_FENCE.finditer(text):
             self._render_prose(text[last:m.start()])
@@ -152,16 +177,24 @@ class ResultWindow:
                 tag = f"h{level}"
                 self._ins(hm.group(2) + "\n", tag)
                 continue
+            # A '* ' bullet would open an italic run and swallow the bold after it.
+            line = self._STAR_BULLET_RE.sub(r"\1- ", line)
             pos = 0
             for m in self._INLINE_RE.finditer(line):
                 if m.start() > pos:
                     self._ins(line[pos:m.start()])
                 if m.group(1) is not None:
-                    self._ins(m.group(1), "bold")
+                    # Models nest code or italics in bold (**`acks=all`:**,
+                    # **(*key salting*)**); the highlight already marks it.
+                    term = m.group(1).replace("`", "").replace("*", "")
+                    tag = "strong" if self._has_key_phrases else self._highlight_tag(term)
+                    self._ins(term, tag)
                 elif m.group(2) is not None:
                     self._ins(m.group(2), "italic")
-                else:
+                elif m.group(3) is not None:
                     self._ins(m.group(3), "icode")
+                else:
+                    self._ins(m.group(4).replace("`", "").replace("*", ""), "key")
                 pos = m.end()
             if pos < len(line):
                 self._ins(line[pos:])
@@ -207,10 +240,11 @@ class ResultWindow:
     def show(self, iterator: Iterator[str]) -> None:
         self.show_and_collect(iterator)
 
-    def show_and_collect(self, iterator: Iterator[str]) -> str:
+    def show_and_collect(self, iterator: Iterator[str],
+                         status: str = "Analyzing screenshot...") -> str:
         result: list[str] = []
         done = threading.Event()
-        self._root.after(0, self._ins, "> Analyzing screenshot...\n", "status")
+        self._root.after(0, self._ins, f"> {status}\n", "status")
 
         def _stream() -> None:
             buf: list[str] = []

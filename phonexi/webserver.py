@@ -224,7 +224,9 @@ class WebView:
     def show_error(self, msg: str) -> None:
         self._server.publish("error", {"text": msg})
 
-    def show_and_collect(self, iterator: Iterator[str]) -> str:
+    def show_and_collect(self, iterator: Iterator[str],
+                         status: str = "Analyzing screenshot...") -> str:
+        # The phone page has its own waiting state; status only matters on the popup.
         full = "".join(iterator)
         self._server.publish("response", {"markdown": full})
         return full

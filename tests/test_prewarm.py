@@ -125,7 +125,7 @@ def test_the_prompt_rides_in_the_message_because_agy_has_no_system_flag(spawner)
     engine = AgyEngine(prewarm=True)
     list(engine.answer_text("why?"))
     content = spawner["procs"][0].sent()[0]["message"]["content"]
-    assert content.startswith(system_prompt())
+    assert content.startswith(system_prompt(voice=True))
 
 
 def test_a_new_spare_is_started_after_each_answer(spawner):
@@ -233,3 +233,12 @@ def test_cli_prewarm_off_restores_the_old_behaviour(monkeypatch):
     monkeypatch.setattr(engines, "CLI_PREWARM", False)
     row = CliChoice("agy", "Antigravity", EFFORTS, "low")
     assert engine_for(row).prewarm is False
+
+
+def test_a_prewarmed_capture_carries_the_capture_prompt(spawner, tmp_path):
+    from phonexi.config import PROMPT_CAPTURE
+    shot = tmp_path / "shot.png"
+    shot.write_bytes(b"\x89PNG")
+    list(AgyEngine(prewarm=True).answer_image(shot))
+    content = spawner["procs"][0].sent()[0]["message"]["content"]
+    assert content.startswith(PROMPT_CAPTURE)

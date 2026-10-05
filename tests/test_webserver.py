@@ -151,3 +151,8 @@ def test_index_html_strips_trailing_dots_without_regex():
     assert "trimEnd()" in INDEX_HTML
     assert "endsWith('.')" in INDEX_HTML
     assert "[.\\s]" not in INDEX_HTML  # no backslash-escape regex (Python 3.14 SyntaxWarning)
+
+
+def test_webview_accepts_the_waiting_line():
+    server = MagicMock()
+    assert WebView(server).show_and_collect(iter(["a"]), status="Answering...") == "a"

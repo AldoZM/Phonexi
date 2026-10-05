@@ -156,44 +156,66 @@ def test_briefing_message_forbids_naming_the_context():
     assert "your own knowledge" in content
 
 
-def test_prompt_forbids_meta_preamble():
-    from phonexi.config import PROMPT
+from phonexi.config import PROMPT_CAPTURE, PROMPT_VOICE
+
+_BOTH_PROMPTS = [PROMPT_CAPTURE, PROMPT_VOICE]
+
+
+@pytest.mark.parametrize("PROMPT", _BOTH_PROMPTS, ids=["capture", "voice"])
+def test_prompt_forbids_meta_preamble(PROMPT):
     assert "never refer to" in PROMPT.lower()
 
 
-def test_prompt_forbids_inventing_facts():
+@pytest.mark.parametrize("PROMPT", _BOTH_PROMPTS, ids=["capture", "voice"])
+def test_prompt_forbids_inventing_facts(PROMPT):
     """An invented number survives the popup and dies in the follow-up question."""
-    from phonexi.config import PROMPT
     low = PROMPT.lower()
     assert "never invent" in low
     assert "do not recall" in low
 
 
-def test_prompt_asks_for_wire_level_answers():
-    from phonexi.config import PROMPT
+@pytest.mark.parametrize("PROMPT", _BOTH_PROMPTS, ids=["capture", "voice"])
+def test_prompt_asks_for_wire_level_answers(PROMPT):
     assert "wire-format level" in PROMPT.lower()
 
 
-def test_prompt_forbids_invented_metrics():
+@pytest.mark.parametrize("PROMPT", _BOTH_PROMPTS, ids=["capture", "voice"])
+def test_prompt_forbids_invented_metrics(PROMPT):
     """gpt-oss-120b invented a 90% reduction and 10k TPS that no context stated."""
-    from phonexi.config import PROMPT
     low = PROMPT.lower()
     assert "percentages" in low
     assert "throughput figures" in low
 
 
-def test_prompt_forbids_markdown_tables():
+@pytest.mark.parametrize("PROMPT", _BOTH_PROMPTS, ids=["capture", "voice"])
+def test_prompt_forbids_markdown_tables(PROMPT):
     """The popup renders a markdown table as a wall of pipes."""
-    from phonexi.config import PROMPT
     assert "no markdown tables" in PROMPT.lower()
 
 
-def test_prompt_forbids_vague_magnitudes():
+@pytest.mark.parametrize("PROMPT", _BOTH_PROMPTS, ids=["capture", "voice"])
+def test_prompt_forbids_vague_magnitudes(PROMPT):
     """"Varios miles por segundo" slipped past the percentages rule."""
-    from phonexi.config import PROMPT
     low = PROMPT.lower()
     assert "orders of magnitude" in low
     assert "vague quantities" in low
+
+
+@pytest.mark.parametrize("PROMPT", _BOTH_PROMPTS, ids=["capture", "voice"])
+def test_prompt_keeps_non_coding_answers_short(PROMPT):
+    """An HTTPS question got 352 words with a brute force and an O(1) bolted on."""
+    low = PROMPT.lower()
+    assert "under 80 words" in low
+    assert "no approach line, no complexity, no brute force" in low
+
+
+@pytest.mark.parametrize("PROMPT", _BOTH_PROMPTS, ids=["capture", "voice"])
+def test_prompt_bolds_only_the_compared_items(PROMPT):
+    """The popup colours each bold term apart; other bold words steal a colour.
+    Shared: the Kafka comparisons arrived as screenshots, not by voice."""
+    low = PROMPT.lower()
+    assert "wrap each compared item in **bold**" in low
+    assert "bold nothing else" in low
 
 
 _SEP = "=" * 60
@@ -806,3 +828,58 @@ def test_groq_overload_does_not_switch_models():
             list(process_text("hi"))
 
     assert client.chat.completions.create.call_count == 1
+
+
+# ── voice gets its own rules; the capture prompt does not carry them ────────
+
+@pytest.mark.parametrize("phrase", [
+    "misheard",                      # Whisper garbles words
+    "answer only what changes",      # follow-ups
+    "open with yes or no",           # yes/no questions
+    "never invent an experience",    # behavioural questions
+])
+def test_voice_only_rules(phrase):
+    assert phrase in PROMPT_VOICE.lower()
+    assert phrase not in PROMPT_CAPTURE.lower()
+
+
+def test_process_text_sends_the_voice_prompt():
+    client = _mock_client()
+    with patch("phonexi.processor.GROQ_API_KEY", "fake-key"),          patch("phonexi.processor.Groq", return_value=client):
+        list(process_text("TCP vs UDP?"))
+    assert _messages_from(client)[0]["content"] == PROMPT_VOICE
+
+
+def test_process_sends_the_capture_prompt(tmp_path):
+    client = _mock_client()
+    with patch("phonexi.processor.GROQ_API_KEY", "fake-key"),          patch("phonexi.processor.Groq", return_value=client):
+        list(process(_png(tmp_path)))
+    texts = [part["text"] for m in _messages_from(client) if isinstance(m["content"], list)
+             for part in m["content"] if part.get("type") == "text"]
+    assert PROMPT_CAPTURE in texts
+
+
+@pytest.mark.parametrize("PROMPT", _BOTH_PROMPTS, ids=["capture", "voice"])
+def test_prompt_opens_bullets_with_a_sentence_to_say_aloud(PROMPT):
+    """A Kafka answer came as four loose bullets with nothing to lead with."""
+    assert "open with one sentence that answers the whole question" in PROMPT.lower()
+
+
+@pytest.mark.parametrize("PROMPT", _BOTH_PROMPTS, ids=["capture", "voice"])
+def test_prompt_asks_for_concrete_values_in_configuration_questions(PROMPT):
+    """'min.insync.replicas above one' instead of RF=3 with min.insync.replicas=2."""
+    assert "give the concrete values" in PROMPT.lower()
+
+
+@pytest.mark.parametrize("PROMPT", _BOTH_PROMPTS, ids=["capture", "voice"])
+def test_prompt_names_the_cost_of_each_fix(PROMPT):
+    """Key salting came without 'you lose per-key ordering', the first follow-up."""
+    assert "name its main cost" in PROMPT.lower()
+
+
+@pytest.mark.parametrize("PROMPT", _BOTH_PROMPTS, ids=["capture", "voice"])
+def test_prompt_marks_key_phrases_instead_of_bold_labels(PROMPT):
+    """Bullet titles in four colours carried no meaning; the key phrase does."""
+    low = PROMPT.lower()
+    assert "==double equals==" in low
+    assert "outside comparisons, never use **bold**" in low

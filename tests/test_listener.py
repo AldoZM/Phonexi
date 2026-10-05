@@ -35,14 +35,14 @@ def test_start_capture_calls_capture_and_creates_window(root):
 
 def _drain(win):
     """Make an existing MagicMock window consume the stream it is handed."""
-    win.show_and_collect.side_effect = lambda stream: "".join(stream)
+    win.show_and_collect.side_effect = lambda stream, **_: "".join(stream)
     return win
 
 
 def _consuming_window():
     """A view that drains the stream, like ResultWindow and WebView do."""
     win = MagicMock()
-    win.show_and_collect.side_effect = lambda stream: "".join(stream)
+    win.show_and_collect.side_effect = lambda stream, **_: "".join(stream)
     return win
 
 
@@ -193,3 +193,18 @@ def test_stream_image_names_the_missing_gemini_key(root):
     mock_win.show_error.assert_called_once_with(
         "GEMINI_API_KEY not set — add it to .env"
     )
+
+
+def test_a_voice_answer_does_not_say_analyzing_screenshot(root):
+    """The audio popup read 'Analyzing screenshot...' under the transcript."""
+    listener = HotkeyListener(tk_root=root)
+    win = _consuming_window()
+    listener._current_window = win
+
+    with patch("phonexi.listener.record", return_value=b"wav"), \
+         patch("phonexi.listener.transcribe", return_value="What is a broker?"), \
+         patch("phonexi.engines.api.process_text", return_value=iter([])):
+        listener._record_worker(MagicMock())
+
+    status = win.show_and_collect.call_args.kwargs.get("status", "")
+    assert status and "screenshot" not in status.lower()

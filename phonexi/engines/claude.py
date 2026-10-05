@@ -25,7 +25,7 @@ class ClaudeEngine(CliEngine):
         args = [
             exe,
             "-p", prompt,
-            "--system-prompt", system_prompt(),
+            "--system-prompt", system_prompt(voice=image is None),
             "--output-format", "stream-json",
             "--verbose",
             "--include-partial-messages",

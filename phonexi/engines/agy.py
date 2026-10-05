@@ -98,7 +98,7 @@ class AgyEngine(CliEngine):
     def argv(self, exe: str, prompt: str, image: "Path | None") -> list[str]:
         return [
             exe,
-            "-p", f"{system_prompt()}\n\n{prompt}",
+            "-p", f"{system_prompt(voice=image is None)}\n\n{prompt}",
             "--output-format", "stream-json",
             *self._model_flags(),
             "--sandbox",
@@ -116,12 +116,12 @@ class AgyEngine(CliEngine):
             "-p=",
         ]
 
-    def session_message(self, prompt: str) -> str:
+    def session_message(self, prompt: str, voice: bool) -> str:
         # Only text blocks are accepted on stdin (checked 2026-09-22: an image
         # block is refused), so a capture still travels as a path to read.
         return json.dumps({
             "event": "user",
-            "message": {"role": "user", "content": f"{system_prompt()}\n\n{prompt}"},
+            "message": {"role": "user", "content": f"{system_prompt(voice)}\n\n{prompt}"},
         })
 
     def result_error(self, event: dict) -> "str | None":

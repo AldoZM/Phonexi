@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Protocol
 
-from phonexi.config import PROMPT
+from phonexi.config import PROMPT_CAPTURE, PROMPT_VOICE
 from phonexi.processor import BRIEFING_HEADER, Context
 
 
@@ -156,7 +156,7 @@ class CliEngine:
         """Flags for a process that takes its prompt on stdin; None if unsupported."""
         return None
 
-    def session_message(self, prompt: str) -> str:
+    def session_message(self, prompt: str, voice: bool) -> str:
         raise NotImplementedError
 
     def result_error(self, event: dict) -> "str | None":
@@ -220,8 +220,8 @@ class CliEngine:
             proc.kill()
             return False
 
-    def _session_stream(self, exe: str, prompt: str) -> Iterator[str]:
-        message = self.session_message(prompt)
+    def _session_stream(self, exe: str, prompt: str, voice: bool) -> Iterator[str]:
+        message = self.session_message(prompt, voice)
         proc = self._take_spare()
         if proc is None or not self._send(proc, message):
             proc = self._spawn_session(exe)
@@ -238,7 +238,7 @@ class CliEngine:
     def _stream(self, prompt: str, image: "Path | None" = None) -> Iterator[str]:
         exe = self._resolve()
         if self.prewarm and self.session_argv(exe) is not None:
-            yield from self._session_stream(exe, prompt)
+            yield from self._session_stream(exe, prompt, voice=image is None)
             return
         proc = subprocess.Popen(
             self.argv(exe, prompt, image),
@@ -312,5 +312,6 @@ class CliEngine:
         yield from self._stream(_compose(question, None, briefing), image=Path(path))
 
 
-def system_prompt() -> str:
-    return PROMPT
+def system_prompt(voice: bool) -> str:
+    # A capture arrives with an image; a voice question is text alone.
+    return PROMPT_VOICE if voice else PROMPT_CAPTURE
