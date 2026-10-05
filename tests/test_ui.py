@@ -82,6 +82,16 @@ def test_target_monitor_single_display_fallback(root):
         win._win.destroy()
 
 
+def test_popup_opens_in_the_top_right_corner(root):
+    with patch("phonexi.ui.mss.MSS") as mock_mss:
+        mock_mss.return_value.__enter__.return_value.monitors = [_VIRTUAL, _PRIMARY]
+        win = ResultWindow(root, use_primary=True)
+        win._win.update_idletasks()
+        x = 1920 - ResultWindow._WIDTH - ResultWindow._MARGIN
+        assert win._win.geometry().endswith(f"+{x}+{ResultWindow._MARGIN}")
+        win._win.destroy()
+
+
 def test_result_window_close_destroys(root):
     win = ResultWindow(root)
     win.close()

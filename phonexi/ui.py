@@ -17,6 +17,7 @@ class ResultWindow:
     _ERR_FG = "#ff5555"
     _WIDTH = 740
     _HEIGHT = 500
+    _MARGIN = 16  # gap to the monitor's top-right corner
     _FONT_CANDIDATES = ("Cascadia Code", "Consolas", "Courier New")
 
     def __init__(self, root: tk.Tk, use_primary: bool = False) -> None:
@@ -51,8 +52,8 @@ class ResultWindow:
 
         self._win.update_idletasks()
         mon = self._target_monitor()
-        x = mon["left"] + (mon["width"] - self._WIDTH) // 2
-        y = mon["top"] + (mon["height"] - self._HEIGHT) // 2
+        x = mon["left"] + mon["width"] - self._WIDTH - self._MARGIN
+        y = mon["top"] + self._MARGIN
         self._win.geometry(f"{self._WIDTH}x{self._HEIGHT}+{x}+{y}")
 
         self._drag_x = 0
