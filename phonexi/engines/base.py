@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Protocol
 
-from phonexi.config import PROMPT_CAPTURE, PROMPT_VOICE
+from phonexi.config import PROMPT_CAPTURE_CLI, PROMPT_VOICE
 from phonexi.processor import BRIEFING_HEADER, Context
 
 
@@ -314,4 +314,4 @@ class CliEngine:
 
 def system_prompt(voice: bool) -> str:
     # A capture arrives with an image; a voice question is text alone.
-    return PROMPT_VOICE if voice else PROMPT_CAPTURE
+    return PROMPT_VOICE if voice else PROMPT_CAPTURE_CLI

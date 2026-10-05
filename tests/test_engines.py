@@ -559,18 +559,18 @@ def test_claude_answers_voice_with_the_voice_prompt(wired):
     assert argv[argv.index("--system-prompt") + 1] == PROMPT_VOICE
 
 
-def test_claude_answers_a_capture_with_the_capture_prompt(wired, tmp_path):
-    from phonexi.config import PROMPT_CAPTURE
+def test_claude_answers_a_capture_with_the_cli_capture_prompt(wired, tmp_path):
+    from phonexi.config import PROMPT_CAPTURE_CLI
     shot = tmp_path / "shot.png"
     shot.write_bytes(b"\x89PNG")
     record = wired(claude_lines("hi"))
     list(ClaudeEngine().answer_image(shot))
     argv = record["argv"]
-    assert argv[argv.index("--system-prompt") + 1] == PROMPT_CAPTURE
+    assert argv[argv.index("--system-prompt") + 1] == PROMPT_CAPTURE_CLI
 
 
 def test_agy_prepends_the_prompt_of_each_mode(wired, tmp_path):
-    from phonexi.config import PROMPT_CAPTURE, PROMPT_VOICE
+    from phonexi.config import PROMPT_CAPTURE_CLI, PROMPT_VOICE
     record = wired(agy_lines("hi"))
     list(AgyEngine().answer_text("why?"))
     assert record["argv"][record["argv"].index("-p") + 1].startswith(PROMPT_VOICE)
@@ -578,4 +578,34 @@ def test_agy_prepends_the_prompt_of_each_mode(wired, tmp_path):
     shot.write_bytes(b"\x89PNG")
     record = wired(agy_lines("hi"))
     list(AgyEngine().answer_image(shot))
-    assert record["argv"][record["argv"].index("-p") + 1].startswith(PROMPT_CAPTURE)
+    assert record["argv"][record["argv"].index("-p") + 1].startswith(PROMPT_CAPTURE_CLI)
+
+
+_INTERVIEW_SECTIONS = [
+    "# Notes", "# Questions", "# Approaches",
+    "# Complexity Analysis", "# Edge Cases", "# Code",
+]
+
+
+def test_cli_capture_follows_the_interview_template():
+    """Mock interviews expect these sections, in this order (Cracking the Coding Interview)."""
+    from phonexi.engines.base import system_prompt
+    prompt = system_prompt(voice=False)
+    positions = [prompt.index(section) for section in _INTERVIEW_SECTIONS]
+    assert positions == sorted(positions)
+
+
+def test_cli_capture_labels_brute_force_and_optimal():
+    """agy wrote the two approaches as loose lines; the labels read at a glance."""
+    from phonexi.config import PROMPT_CAPTURE_CLI
+    assert "'- Brute force:'" in PROMPT_CAPTURE_CLI
+    assert "'- Optimal:'" in PROMPT_CAPTURE_CLI
+
+
+def test_only_the_cli_capture_gets_the_template():
+    """The API capture is capped at 900 output tokens on Groq; voice gets loose questions."""
+    from phonexi.config import PROMPT_CAPTURE, PROMPT_VOICE
+    for prompt in (PROMPT_CAPTURE, PROMPT_VOICE):
+        assert "# Notes" not in prompt
+    assert "one sentence with the approach" in PROMPT_CAPTURE
+    assert "one sentence with the approach" in PROMPT_VOICE

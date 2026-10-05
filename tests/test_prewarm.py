@@ -236,9 +236,9 @@ def test_cli_prewarm_off_restores_the_old_behaviour(monkeypatch):
 
 
 def test_a_prewarmed_capture_carries_the_capture_prompt(spawner, tmp_path):
-    from phonexi.config import PROMPT_CAPTURE
+    from phonexi.config import PROMPT_CAPTURE_CLI
     shot = tmp_path / "shot.png"
     shot.write_bytes(b"\x89PNG")
     list(AgyEngine(prewarm=True).answer_image(shot))
     content = spawner["procs"][0].sent()[0]["message"]["content"]
-    assert content.startswith(PROMPT_CAPTURE)
+    assert content.startswith(PROMPT_CAPTURE_CLI)

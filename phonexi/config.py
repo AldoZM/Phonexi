@@ -59,12 +59,38 @@ CLI_PREWARM: bool = os.getenv("CLI_PREWARM", "1") != "0"
 
 # The prompt is split by hotkey: a capture shows text or code on screen, a voice
 # question is an interviewer talking. Voice adds its own rules on top of the shared ones.
-_SHARED_RULES = (
-    "- Respond in the SAME language as the question.\n"
+_LANGUAGE_RULE = "- Respond in the SAME language as the question.\n"
+
+_CODING_RULE = (
     "- If it is a coding problem: one sentence with the approach, then the solution "
     "as a fenced code block (```lang) in the target language (match the editor; "
     "default to Python), then one line with time and space complexity. No docstrings, "
     "no comments unless a line is non-obvious, no example usage, no brute force.\n"
+)
+
+# A -cli capture walks the problem the way a mock interview expects it
+# (Cracking the Coding Interview). Only -cli: Groq caps the API at 900 output tokens.
+_CODING_RULE_CLI = (
+    "- If it is a coding problem, answer with exactly these six markdown headings, "
+    "each on its own line, in this order and in English; the text under them follows "
+    "the question's language. Start directly with the first heading and write "
+    "nothing outside the six sections:\n"
+    "  # Notes -- 2 or 3 bullets with the constraints in the statement that shape "
+    "the solution (input size, sorted input, duplicates, value range).\n"
+    "  # Questions -- 2 or 3 clarifying questions to ask the interviewer before "
+    "coding (empty input, duplicates, what to return when there is no answer).\n"
+    "  # Approaches -- two bullets: '- Brute force:' the brute force in one line with "
+    "its time complexity, then '- Optimal:' the optimal approach in one or two lines "
+    "with its key idea as a ==key phrase==.\n"
+    "  # Complexity Analysis -- time and space of the optimal approach, one line "
+    "each, saying why.\n"
+    "  # Edge Cases -- 3 to 5 short bullets.\n"
+    "  # Code -- the optimal solution only, as a fenced code block (```lang) in the "
+    "target language (match the editor; default to Python). No docstrings, no "
+    "comments unless a line is non-obvious, no example usage.\n"
+)
+
+_SHARED_RULES = (
     "- Any other question (concepts, design, protocols, experience): answer in at "
     "most 4 short sentences or 5 short bullets, under 80 words. Lead with the key "
     "point. No approach line, no complexity, no brute force.\n"
@@ -136,16 +162,20 @@ _VOICE_RULES = (
     "person, tool or outcome.\n"
 )
 
-PROMPT_CAPTURE = (
+_CAPTURE_INTRO = (
     "You are an expert software engineer. Answer the technical question shown in the "
     "screenshot. The reader glances at your answer mid-conversation, so brevity "
     "matters as much as correctness.\n"
-    "Rules:\n" + _SHARED_RULES
+    "Rules:\n"
 )
+
+PROMPT_CAPTURE = _CAPTURE_INTRO + _LANGUAGE_RULE + _CODING_RULE + _SHARED_RULES
+
+PROMPT_CAPTURE_CLI = _CAPTURE_INTRO + _LANGUAGE_RULE + _CODING_RULE_CLI + _SHARED_RULES
 
 PROMPT_VOICE = (
     "You are an expert software engineer. Answer the question an interviewer just "
     "asked aloud. The reader glances at your answer while the conversation goes on, "
     "so brevity matters as much as correctness.\n"
-    "Rules:\n" + _VOICE_RULES + _SHARED_RULES
+    "Rules:\n" + _VOICE_RULES + _LANGUAGE_RULE + _CODING_RULE + _SHARED_RULES
 )
